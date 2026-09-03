@@ -1,0 +1,84 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-request: true
+      force-response: true
+  # 启用转发头识别，使反向代理后的外链地址（见 HttpPathUtil）能够正确生成
+  forward-headers-strategy: native
+
+spring:
+  application:
+    name: sky-take-out-AI
+  # 本地开发时可在 src/main/resources/secrets.yaml 中覆盖下面的环境变量（该文件已被 .gitignore 忽略）；
+  # 使用 optional: 前缀，文件不存在时不会导致启动失败
+  config:
+    import: optional:classpath:secrets.yaml
+
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    database: ${REDIS_DATABASE:1}
+    password: ${REDIS_PASSWORD:}
+    timeout: 5000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: 3000ms
+      shutdown-timeout: 100ms
+
+  ai:
+    openai:
+      chat:
+        base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+        api-key: ${DASHSCOPE_API_KEY}
+        options:
+          model: ${DASHSCOPE_CHAT_MODEL:qwen-plus}
+      embedding:
+        base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+        api-key: ${DASHSCOPE_API_KEY}
+        options:
+          model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v4}
+          dimensions: ${EMBEDDING_DIMENSIONS:1024}
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/sky_take_out_ai?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:}
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+# SpringDoc OpenAPI（生成 API 文档）+ Swagger UI 界面
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.kanodays88.skytakeoutai.controller
+
+logging:
+  level:
+    org.springframework.ai.chat.client.advisor: debug
+    com.kanodays88.skytakeoutai: debug
+
+app:
+  # 部署在反向代理之后且代理统一加 /api 前缀时才需要配置；本地直连保持为空
+  url:
+    api-prefix: ${APP_API_PREFIX:}
+  baidu:
+    api:
+      key: ${BAIDU_API_KEY:}
