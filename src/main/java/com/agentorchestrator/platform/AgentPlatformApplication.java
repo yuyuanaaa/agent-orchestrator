@@ -3,11 +3,11 @@ package com.agentorchestrator.platform;
 import com.agentorchestrator.platform.constant.FileConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration;
-import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -35,8 +35,9 @@ public class AgentPlatformApplication {
 
     //配置向量数据库，基于 SimpleVectorStore 的向量数据库
     // 返回具体类型 SimpleVectorStore，便于其他组件调用 save/load 做快照持久化（仍是 VectorStore 的子类）
+    // 参数用 EmbeddingModel 接口而非 OpenAiEmbeddingModel，使 mock profile 下可注入 MockEmbeddingModel
     @Bean
-    public SimpleVectorStore vectorStore(OpenAiEmbeddingModel model){
+    public SimpleVectorStore vectorStore(EmbeddingModel model){
         SimpleVectorStore vectorStore = SimpleVectorStore.builder(model).build();
 
         // 若存在历史快照则恢复，避免重启后向量数据丢失（内置知识 + 用户上传 PDF 的向量）
