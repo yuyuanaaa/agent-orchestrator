@@ -39,7 +39,7 @@ class PlanExecuteTest {
         planExecute = new PlanExecute(
                 Mockito.mock(OpenAiChatModel.class),
                 null,                                // 工厂在纯逻辑测试中不会被触达
-                Runnable::run);                      // 同步执行器
+                Runnable::run);                      // 同步执行器（waveExecutor），纯逻辑测试不真正并发
     }
 
     private SubTask task(int id, Set<Integer> downstream) {
