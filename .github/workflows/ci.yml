@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root123456
+          TZ: Asia/Shanghai
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      # 用 secrets.SPRING_AI_OPENAI_API_KEY 在仓库 Settings → Secrets 配置真实 Key
+      # 缺 Key 时 CI 仍跑（Spring AI 占位符足够让 Spring 上下文初始化）
+      SPRING_AI_OPENAI_API_KEY: ${{ secrets.SPRING_AI_OPENAI_API_KEY || 'sk-ci-placeholder' }}
+      MYSQL_URL: jdbc:mysql://localhost:3306/agent_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: root123456
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      REDIS_DATABASE: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Initialize database
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot123456 -e "CREATE DATABASE IF NOT EXISTS agent_platform DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          mysql -h 127.0.0.1 -uroot -proot123456 agent_platform < db/init.sql
+
+      - name: Compile (no tests)
+        run: ./mvnw -B -DskipTests compile
+
+      - name: Run tests + benchmarks
+        # -fae: 即使个别测试失败也继续，输出完整诊断
+        # surefire 已配置包含 *Benchmark.java
+        run: ./mvnw -B -fae test
+
+      - name: Build jar artifact
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: ./mvnw -B -DskipTests package
+
+      - name: Upload jar
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-orchestrator
+          path: target/agent-orchestrator-*.jar
+          if-no-files-found: error
