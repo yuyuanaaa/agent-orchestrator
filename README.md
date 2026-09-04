@@ -266,7 +266,7 @@ src/main/java/com/agentorchestrator/platform/
 
 ## 测试
 
-共 45 个测试，全部不依赖外部 LLM / 真实 MySQL，可一键复跑：
+共 31 个测试（含 3 个性能基准），全部不依赖外部 LLM / 真实 MySQL，可一键复跑：
 
 ```bash
 ./mvnw test
@@ -279,8 +279,11 @@ src/main/java/com/agentorchestrator/platform/
 | `OrderToolTest` | 5 | 订单详情回填、`NOT_A_DISH` 哨兵、null/空列表容错、多条目不覆盖 |
 | `DishToolTest` | 4 | 类别名批量回填（N+1 修复回归）、id 去重、空结果不查库 |
 | `MenuCacheServiceTest` | 5 | SCAN 替代 KEYS、连带失效策略、空 key 不删、Redis 异常降级 |
-| `WebSearchToolTest` | 2 | 联网搜索结果解析 |
+| `WebSearchToolTest` | 1 | 联网搜索工具加载冒烟 |
 | `AgentPlatformApplicationTests` | 1 | Spring 上下文冒烟（需本地 MySQL/Redis/模型 Key） |
+| `TopologyParallelBenchmark` | 1 | 拓扑并行加速比（性能基准） |
+| `SkillTokenBenchmark` | 1 | 三层技能加载 token 节省（性能基准） |
+| `CacheScanBenchmark` | 1 | SCAN vs KEYS 阻塞对比（性能基准，需 Redis 在线） |
 
 ### 性能基准（简历量化数据来源）
 
