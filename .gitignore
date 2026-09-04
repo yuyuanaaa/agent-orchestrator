@@ -15,6 +15,10 @@ tmp/
 *.dumpstream
 *.pdf
 
+### Git 内部工作目录（filter-branch / rebase 中断时残留）###
+.git-rewrite/
+.git.backup.*/
+
 ### STS ###
 .apt_generated
 .classpath
