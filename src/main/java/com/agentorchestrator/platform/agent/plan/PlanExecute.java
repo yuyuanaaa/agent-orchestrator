@@ -367,26 +367,8 @@ public class PlanExecute {
         return context.toString();
     }
 
-//    /**
-//     * Determine whether a subtask result can skip LLM distillation.
-//     * Returns true when the raw result is already valid JSON containing all required fields
-//     * and is concise enough (<2000 chars), making further LLM distillation unnecessary.
-//     */
-//    private boolean shouldSkipDistill(SubTask task, String rawResult) {
-//        try {
-//            //TODO
-//            JsonNode json = new ObjectMapper().readTree(rawResult);
-//            Set<String> required = task.coreContent();
-//            if (required != null && !required.isEmpty()) {
-//                for (String field : required) {
-//                    if (!json.has(field)) return false;
-//                }
-//            }
-//            return rawResult.length() < 2000;
-//        } catch (Exception e) {
-//            return false;
-//        }
-//    }
+    /**
+     * 任务蒸馏
 
     /**
      * 任务蒸馏
