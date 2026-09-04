@@ -1,9 +1,9 @@
 package com.agentorchestrator.platform.service.impl;
 
 import cn.hutool.json.JSONUtil;
-import com.agentorchestrator.platform.constant.FileConstant;
 import com.agentorchestrator.platform.content.BaseContent;
 import com.agentorchestrator.platform.service.FileUploadService;
+import com.agentorchestrator.platform.utils.UserFilePath;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.ExtractedTextFormatter;
@@ -21,7 +21,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -42,7 +41,11 @@ public class FileUploadServiceImpl implements FileUploadService {
     public boolean save(String chatId, Resource resource) {
         // 1.保存到本地磁盘（同名文件直接覆盖，保证磁盘与向量库内容一致）
         String filename = resource.getFilename();//获取文件名字
-        File target = new File(Paths.get(FileConstant.FILE_SAVE_DIR,BaseContent.getUser().getUserName(),chatId,Objects.requireNonNull(filename)).toString());
+        // 用户名/chatId/filename 均视为不可信输入：chatId 来自 @PathVariable 而非 BaseContent，
+        // 走显式重载，先白名单校验再 resolve，杜绝 ../、绝对路径等路径逃逸
+        File target = UserFilePath.resolveInSessionRoot(
+                BaseContent.getUser().getUserName(), chatId,
+                Objects.requireNonNull(filename)).toFile();
         try {
             // 关键修复：创建所有不存在的父目录
             Files.createDirectories(target.toPath().getParent());
@@ -82,7 +85,9 @@ public class FileUploadServiceImpl implements FileUploadService {
     public boolean delete(String chatId, String fileName) {
         String userName = BaseContent.getUser().getUserName();
         // 1. 删除磁盘文件（不存在时视为已删除，返回成功，保持幂等）
-        Path filePath = Paths.get(FileConstant.FILE_SAVE_DIR, userName, chatId, fileName);
+        // 走显式 UserFilePath 重载：先白名单校验 userName/chatId/fileName，
+        // 再校验 resolved path 必须落在会话根目录下，杜绝 ../、绝对路径、盘符等逃逸
+        Path filePath = UserFilePath.resolveInSessionRoot(userName, chatId, fileName);
         try {
             Files.deleteIfExists(filePath);
         } catch (IOException e) {

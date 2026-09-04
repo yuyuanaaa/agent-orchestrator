@@ -9,12 +9,12 @@ import com.agentorchestrator.platform.agent.simpleChat.SimpleChatAgent;
 import com.agentorchestrator.platform.agent.sse.SSESend;
 import com.agentorchestrator.platform.common.ErrorCode;
 import com.agentorchestrator.platform.common.Result;
-import com.agentorchestrator.platform.constant.FileConstant;
 import com.agentorchestrator.platform.content.BaseContent;
 import com.agentorchestrator.platform.entity.dto.UserLoginDTO;
 import com.agentorchestrator.platform.exception.BusinessException;
 import com.agentorchestrator.platform.memory.RedisChatMemory;
 import com.agentorchestrator.platform.utils.DirectoryCleaner;
+import com.agentorchestrator.platform.utils.UserFilePath;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -45,7 +45,6 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -195,7 +194,9 @@ public class ChatController {
     public Result<String> historyRemove(@PathVariable("chatId") String chatId) throws IOException {
         chatMemory().clear(chatId);
         stringRedisTemplate.opsForSet().remove(CHAT_LIST_KEY_PREFIX + currentUserName(), chatId);
-        DirectoryCleaner.deleteRecursively(Paths.get(FileConstant.FILE_SAVE_DIR, currentUserName(), chatId));
+        // chatId 来自 @PathVariable，零信任：先白名单校验再解析为绝对路径，
+        // 校验通过后该路径必然落在 FILE_SAVE_DIR 下，可安全递归删除
+        DirectoryCleaner.deleteRecursively(UserFilePath.resolveSessionDir(currentUserName(), chatId));
         return Result.success("删除成功");
     }
 

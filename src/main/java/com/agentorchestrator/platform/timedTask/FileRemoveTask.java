@@ -1,7 +1,8 @@
 package com.agentorchestrator.platform.timedTask;
 
-import com.agentorchestrator.platform.constant.FileConstant;
+import com.agentorchestrator.platform.exception.BusinessException;
 import com.agentorchestrator.platform.utils.DirectoryCleaner;
+import com.agentorchestrator.platform.utils.UserFilePath;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
@@ -81,7 +82,17 @@ public class FileRemoveTask {
             String userName = parts[1];
             String chatId = parts[2];
 
-            DirectoryCleaner.deleteRecursively(Paths.get(FileConstant.FILE_SAVE_DIR, userName, chatId));
+            // userName/chatId 来自 Redis key 拆段（split(":", 3)），
+            // 零信任：先走 UserFilePath 白名单校验，不合法直接跳过避免脏数据污染磁盘
+            java.nio.file.Path sessionDir;
+            try {
+                sessionDir = UserFilePath.resolveSessionDir(userName, chatId);
+            } catch (com.agentorchestrator.platform.exception.BusinessException e) {
+                log.warn("清理过期会话跳过非法 key: {} ({})", key, e.getMessage());
+                stringRedisTemplate.opsForSet().remove(CHAT_MEMORY_CLEANUP_SET, key);
+                continue;
+            }
+            DirectoryCleaner.deleteRecursively(sessionDir);
 
             // 会话记忆已迁移到 Redis，删除对应数据 key 与用户会话 id 列表中的记录
             stringRedisTemplate.delete(CHAT_MEMORY_DATA_PREFIX + userName + ":" + chatId);
