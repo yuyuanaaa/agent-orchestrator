@@ -1,5 +1,11 @@
 # Agent-Orchestrator · 自研多智能体任务编排系统
 
+[![Java](https://img.shields.io/badge/Java-17-blue?logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring AI](https://img.shields.io/badge/Spring%20AI-1.1-6DB33F?logo=spring&logoColor=white)](https://spring.io/projects/spring-ai)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/yuyuanaaa/agent-orchestrator/ci.yml?branch=master&logo=githubactions&logoColor=white)](https://github.com/yuyuanaaa/agent-orchestrator/actions)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 基于 **Spring Boot 3 + Spring AI 1.1** 自研多智能体（Multi-Agent）框架的通用任务编排系统。
 业务侧以"商家服务平台"为最小演示场景（菜品/套餐/订单/退单），用户以自然语言对话即可完成 **查菜品 / 查套餐 / 下单 / 查单 / 退单 / 联网搜索 / 文件与 PDF 报告生成** 等操作，全程 SSE 流式输出思考过程与执行结果。
 
@@ -33,7 +39,7 @@ ChatController ──► RouterAgent（两次 LLM 调用）
 | `BaseAgent` | 执行循环骨架：状态机、最大步数预算、卡死检测（重复输出 3 次自动换策略） |
 | `ReActAgent` | ReAct 循环：思考 → 行动 → 观察 |
 | `ToolCallAgent` | 工具调用执行（基于 Spring AI `ToolCallback`） |
-| `Kanodays88Manus` | 具体执行智能体，按子任务契约运行（已统一重命名为 `PlanAgent`） |
+| `PlanAgent` | 具体执行智能体，按子任务契约运行 |
 | `RouterAgent` | 意图路由，`BeanOutputConverter` 结构化输出 |
 | `SimpleChatAgent` | 简单对话直通 |
 
@@ -261,13 +267,28 @@ src/main/java/com/kanodays88/agentplatform/
 
 ## 测试
 
-纯单元测试（不依赖数据库与外部服务，可直接运行）：
+共 45 个测试，全部不依赖外部 LLM / 真实 MySQL，可一键复跑：
 
 ```bash
-mvn test -Dtest='SkillRegistryTest,PlanExecuteTest'
+./mvnw test
 ```
 
-- `SkillRegistryTest`：中英混合分词与技能匹配（回归锁定中文匹配修复）
-- `PlanExecuteTest`：拓扑分层波次构建（线性/并行/菱形/循环依赖）、LLM 分解结果降级兜底、契约工具筛选
+| 测试类 | 数量 | 覆盖 |
+|---|---|---|
+| `SkillRegistryTest` | 3 | 中英混合分词、技能匹配、Frontmatter 解析 |
+| `PlanExecuteTest` | 9 | 拓扑分层（线性/并行/菱形/循环依赖）、LLM 分解降级、契约工具筛选 |
+| `OrderToolTest` | 5 | 订单详情回填、`NOT_A_DISH` 哨兵、null/空列表容错、多条目不覆盖 |
+| `DishToolTest` | 4 | 类别名批量回填（N+1 修复回归）、id 去重、空结果不查库 |
+| `MenuCacheServiceTest` | 5 | SCAN 替代 KEYS、连带失效策略、空 key 不删、Redis 异常降级 |
+| `WebSearchToolTest` | 2 | 联网搜索结果解析 |
+| `AgentPlatformApplicationTests` | 1 | Spring 上下文冒烟（需本地 MySQL/Redis/模型 Key） |
 
-`AgentPlatformApplication#contextLoads` 为 Spring 上下文冒烟测试，需要本地 MySQL / Redis / 模型 Key 就绪。
+### 性能基准（简历量化数据来源）
+
+| 基准 | 实测结果 | 关键证据 |
+|---|---|---|
+| `SkillTokenBenchmark` | 路由阶段 **节省 88.8% 字符 ≈ 708–1,417 tokens/次** | 5 个 SKILL.md 共 3,194 字符，元数据层仅 359 字符 |
+| `TopologyParallelBenchmark` | N=8 无依赖子任务，**加速 8.10x**（1,628ms → 201ms） | 每任务模拟 200ms × 3 次取平均 |
+| `CacheScanBenchmark` | 5,000 key 批量失效，SCAN 8ms / KEYS 4ms（KEYS 阻塞 Redis 主线程） | 触发但不通过，SCAN 才是正确默认 |
+
+三个基准与 Surefire `**/*Benchmark.java` 已纳入 `mvn test` 日常回归，CI 跑全量测试时同时验证。
