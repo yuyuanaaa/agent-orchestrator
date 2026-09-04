@@ -8,6 +8,8 @@ import com.agentorchestrator.platform.agent.router.RouterAgent;
 import com.agentorchestrator.platform.agent.simpleChat.SimpleChatAgent;
 import com.agentorchestrator.platform.agent.sse.SSESend;
 import com.agentorchestrator.platform.common.ErrorCode;
+import com.agentorchestrator.platform.common.ChatRateLimiter;
+import com.agentorchestrator.platform.common.LLMCircuitBreaker;
 import com.agentorchestrator.platform.common.Result;
 import com.agentorchestrator.platform.content.BaseContent;
 import com.agentorchestrator.platform.entity.dto.UserLoginDTO;
@@ -95,6 +97,14 @@ public class ChatController {
     @Qualifier("agentExecutor")
     private ThreadPoolTaskExecutor agentExecutor;
 
+    /** 对话限流器（Redis 固定窗口计数，单用户 QPS 保护） */
+    @Autowired
+    private ChatRateLimiter chatRateLimiter;
+
+    /** LLM 调用熔断器（连续失败快速降级，避免请求雪崩） */
+    @Autowired
+    private LLMCircuitBreaker llmCircuitBreaker;
+
     /**
      * 智能体对话主入口（自动意图路由）
      */
@@ -103,6 +113,8 @@ public class ChatController {
         if (msg == null || msg.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "提问内容不能为空");
         }
+        // 单用户限流：同步阶段检查，超限直接抛异常返回错误，不进入 SSE 异步链路
+        chatRateLimiter.checkRateLimit(currentUserName());
         return executeSse(chatId, (emitter, memory) -> {
             // 进入 RouterAgent 做意图路由
             RouterAgent routerAgent = agentFactory.createRouterAgent(emitter);
@@ -137,6 +149,8 @@ public class ChatController {
         if (msg == null || msg.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "提问内容不能为空");
         }
+        // 单用户限流：同 chat 入口
+        chatRateLimiter.checkRateLimit(currentUserName());
         return executeSse(chatId, (emitter, memory) -> {
             SSESend.sendEventThink(emitter, "开始检索知识库关联内容\n");
             String ragContent = searchKnowledgeBase(msg, chatId);
@@ -226,12 +240,23 @@ public class ChatController {
                 BaseContent.setChatId(chatIdInThread);
                 BaseContent.setUser(currentUser);
 
+                // LLM 熔断：熔断期间快速失败降级，不把请求继续打到下游模型
+                if (!llmCircuitBreaker.allowRequest()) {
+                    log.warn("LLM 熔断中，降级返回 chatId={}", chatIdInThread);
+                    SSESend.sendEventResult(emitter, "AI 服务暂时不可用，请稍后重试");
+                    return;
+                }
+
                 String aiResult = task.execute(emitter, chatMemory());
+                // 链路成功，重置熔断失败计数
+                llmCircuitBreaker.recordSuccess();
                 if (aiResult != null) {
                     afterTask.execute(emitter, aiResult);
                 }
             } catch (Exception e) {
                 log.error("对话执行异常, chatId={}", chatIdInThread, e);
+                // 记录失败供熔断器统计，连续失败达到阈值后自动熔断
+                llmCircuitBreaker.recordFailure();
                 SSESend.sendEventResult(emitter, "执行失败: " + e.getMessage());
                 emitter.completeWithError(e);
             } finally {
