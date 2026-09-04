@@ -23,7 +23,6 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
@@ -87,9 +86,6 @@ public class ChatController {
 
     @Autowired
     private PlanExecute planExecute;
-
-    @Autowired
-    private OpenAiChatModel openAiChatModel;
 
     @Autowired
     private AgentFactory agentFactory;

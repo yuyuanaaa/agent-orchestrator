@@ -1,7 +1,7 @@
 package com.agentorchestrator.platform.common;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -10,7 +10,7 @@ public class ChatDecide {
 
 
     @Autowired
-    private OpenAiChatModel model;
+    private ChatModel model;
 
     //用于判断此次对话需不需要走向量数据库获取资料
     public boolean chatDecideRAG(String msg){

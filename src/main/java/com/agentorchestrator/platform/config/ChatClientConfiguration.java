@@ -10,7 +10,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Bean;
@@ -29,7 +29,7 @@ public class ChatClientConfiguration {
      * @return
      */
     @Bean
-    public ChatClient chatClient(OpenAiChatModel model, ChatMemory chatMemory, DishTool dishTool, SetmealTool setmealTool, OrderTool orderTool){
+    public ChatClient chatClient(ChatModel model, ChatMemory chatMemory, DishTool dishTool, SetmealTool setmealTool, OrderTool orderTool){
 
         return ChatClient.builder(model)
                 .defaultSystem(ChatSystem.CHAT_SYSTEM)//设置系统角色

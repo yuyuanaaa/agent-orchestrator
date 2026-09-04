@@ -3,7 +3,7 @@ package com.agentorchestrator.platform.agent;
 import com.agentorchestrator.platform.agent.router.RouterAgent;
 import com.agentorchestrator.platform.agent.simpleChat.SimpleChatAgent;
 import com.agentorchestrator.platform.skill.SkillRegistry;
-import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,19 +21,22 @@ import java.io.IOException;
  * 此前 {@code new RouterAgent(...)} 散落在 Controller，依赖清单变化时要改多处；
  * 现在由工厂注入依赖，调用方只传运行时参数。
  * <p>
+ * 模型依赖声明为 {@link ChatModel} 接口而非 {@code OpenAiChatModel} 具体实现，
+ * 以便通过 profile 切换真实模型与 Mock 模型（面试官 clone 后免 Key 即可跑通）。
+ * <p>
  * 后续若引入 Agent 池化或统一生命周期埋点（Token 统计、轨迹落库），只需改这一个类。
  */
 @Component
 public class AgentFactory {
 
-    private final OpenAiChatModel chatModel;
+    private final ChatModel chatModel;
     private final VectorStore vectorStore;
     private final ToolCallback[] allTools;
     private final SkillRegistry skillRegistry;
     private final StringRedisTemplate stringRedisTemplate;
 
     @Autowired
-    public AgentFactory(OpenAiChatModel chatModel,
+    public AgentFactory(ChatModel chatModel,
                         VectorStore vectorStore,
                         ToolCallback[] allTools,
                         SkillRegistry skillRegistry,
