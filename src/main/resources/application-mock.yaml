@@ -1,0 +1,13 @@
+# Mock 模式配置（免 Key 演示）
+# 使用：--spring.profiles.active=mock 或环境变量 SPRING_PROFILES_ACTIVE=mock
+# 作用：关闭 OpenAI chat/embedding 自动装配，改用 config/mock 下的 MockChatModel /
+#       MockEmbeddingModel，让面试官 clone 后无需 DashScope Key 即可跑通完整对话链路。
+#
+# 注意：mock 模式下 RAG 检索与联网搜索的语义能力为占位，仅用于演示链路贯通；
+#       真实推理需接入 API Key（见 application.yaml 的 DASHSCOPE_* 环境变量）。
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
