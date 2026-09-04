@@ -10,6 +10,11 @@ tmp/
 *.log
 .env
 
+### 项目记忆与临时笔记 ###
+.workbuddy/
+*.dumpstream
+*.pdf
+
 ### STS ###
 .apt_generated
 .classpath

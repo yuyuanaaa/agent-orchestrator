@@ -1,11 +1,11 @@
 -- =====================================================================
--- SkyTakeOut-AI 建库建表脚本（MySQL 8.0+）
--- 表结构依据 src/main/java/com/kanodays88/skytakeoutai/entity 下的实体类生成，
+-- agent-orchestrator 建库建表脚本（MySQL 8.0+）
+-- 表结构依据 src/main/java/com/kanodays88/agentplatform/entity 下的实体类生成，
 -- 字段命名遵循 MyBatis-Plus 驼峰 → 下划线映射约定。
 -- =====================================================================
 
-CREATE DATABASE IF NOT EXISTS sky_take_out_ai DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE sky_take_out_ai;
+CREATE DATABASE IF NOT EXISTS agent_platform DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE agent_platform;
 
 -- ---------------------------------------------------------------------
 -- 用户表
@@ -158,8 +158,8 @@ CREATE TABLE `order_detail` (
     `name`        VARCHAR(64)   DEFAULT NULL COMMENT '名字',
     `image`       VARCHAR(255)  DEFAULT NULL COMMENT '图片',
     `order_id`    BIGINT        NOT NULL COMMENT '订单id',
-    `dish_id`     BIGINT        DEFAULT NULL COMMENT '菜品id（0 表示按菜品下单的实际 id 未记录）',
-    `setmeal_id`  BIGINT        DEFAULT NULL COMMENT '套餐id（0 表示按套餐下单的实际 id 未记录）',
+    `dish_id`     BIGINT        DEFAULT NULL COMMENT '菜品id（-1 表示该明细是套餐项而非菜品项；判定是否为菜品项统一用 dish_id > 0，真实自增主键从 1 开始）',
+    `setmeal_id`  BIGINT        DEFAULT NULL COMMENT '套餐id（-1 表示该明细是菜品项而非套餐项；判定是否为套餐项统一用 setmeal_id > 0）',
     `dish_flavor` VARCHAR(64)   DEFAULT NULL COMMENT '口味',
     `number`      INT           DEFAULT 1 COMMENT '数量',
     `amount`      DECIMAL(10,2) DEFAULT NULL COMMENT '金额',
