@@ -37,6 +37,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -51,14 +52,14 @@ record DecomposedTasks(
 ) {}
 
 /**
- * 4. 蒸馏结果双副本：解决上下文膨胀+兜底召回
+ * 4. 蒸馏结果双副本：结构化结果进上下文，原始结果留存用于排查与后续召回
  */
 record DistilledResult(
         // 所属子任务ID
         int taskId,
         // 【进上下文】结构化蒸馏后的核心结果（token压缩90%+）
         String structuredCoreResult,
-        // 【归档不进上下文】子任务原始完整结果（兜底召回用）
+        // 【不进上下文】子任务原始完整结果（留存用于排查与后续召回）
         String rawResult,
         // 子任务契约（用于下游校验）
         SubTask subTask
@@ -82,15 +83,15 @@ public class PlanExecute {
     /** Agent 创建工厂，收敛实例化入口 */
     private final AgentFactory agentFactory;
 
-    /** 共享智能体线程池（见 AsyncConfig），替代每个 wave 新建的临时线程池 */
-    private final Executor agentExecutor;
+    /** wave 子任务线程池（见 AsyncConfig.waveExecutor），与 SSE 主任务池隔离，避免嵌套提交死锁 */
+    private final Executor waveExecutor;
 
     public PlanExecute(OpenAiChatModel openAiChatModel,
                        AgentFactory agentFactory,
-                       @Qualifier("agentExecutor") Executor agentExecutor) throws IOException {
+                       @Qualifier("waveExecutor") Executor waveExecutor) throws IOException {
         this.openAiChatModel = openAiChatModel;
         this.agentFactory = agentFactory;
-        this.agentExecutor = agentExecutor;
+        this.waveExecutor = waveExecutor;
         this.chatClient = ChatClient.builder(openAiChatModel)
                 .defaultAdvisors(
                 new MyLoggerAdvisor()
@@ -180,10 +181,11 @@ public class PlanExecute {
                             //释放ThreadLocal
                             RequestContextHolder.resetRequestAttributes();
                         }
-                }, agentExecutor));
+                }, waveExecutor));
             }
-            //阻塞等待本波次全部子任务完成，下一波次的输入依赖本波次的执行结果
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            //阻塞等待本波次全部子任务完成，下一波次的输入依赖本波次的执行结果；
+            //orTimeout(60s) 兜底：子任务池即使被打满也不永久阻塞，超时抛异常由上游捕获
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).orTimeout(60, TimeUnit.SECONDS).join();
         }
 
         //整合结果集和意图，得到最终结果
