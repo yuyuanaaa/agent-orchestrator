@@ -9,7 +9,6 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -22,7 +21,7 @@ public class SimpleChatAgent {
     private final ChatMemory chatMemory;
     private final ToolCallback[] allTools;
 
-    public SimpleChatAgent(OpenAiChatModel chatModel,ToolCallback[] allTools, StringRedisTemplate stringRedisTemplate) throws IOException {
+    public SimpleChatAgent(ChatModel chatModel, ToolCallback[] allTools, StringRedisTemplate stringRedisTemplate) throws IOException {
         this.chatClient = ChatClient.builder(chatModel).defaultAdvisors(new MyLoggerAdvisor()).build();
         this.chatMemory = new RedisChatMemory(stringRedisTemplate, BaseContent.getUser().getUserName());
         this.allTools = allTools;

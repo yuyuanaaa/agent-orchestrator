@@ -11,12 +11,12 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -36,7 +36,7 @@ public class RouterAgent {
     private final SkillRegistry skillRegistry;
     private final SseEmitter sseEmitter;
 
-    public RouterAgent(OpenAiChatModel model, VectorStore vectorStore, ToolCallback[] allTools, SkillRegistry skillRegistry, SseEmitter sseEmitter, StringRedisTemplate stringRedisTemplate) throws IOException {
+    public RouterAgent(ChatModel model, VectorStore vectorStore, ToolCallback[] allTools, SkillRegistry skillRegistry, SseEmitter sseEmitter, StringRedisTemplate stringRedisTemplate) throws IOException {
         this.chatClient = ChatClient.builder(model).defaultAdvisors(new MyLoggerAdvisor()).build();
         this.vectorStore = vectorStore;
         this.chatMemory = new RedisChatMemory(stringRedisTemplate, BaseContent.getUser().getUserName());

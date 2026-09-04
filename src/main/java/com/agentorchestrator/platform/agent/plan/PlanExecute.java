@@ -15,8 +15,8 @@ import com.agentorchestrator.platform.entity.dto.UserLoginDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.converter.BeanOutputConverter;
-import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -75,7 +75,7 @@ public class PlanExecute {
     private ChatClient chatClient;
 
 
-    private OpenAiChatModel openAiChatModel;
+    private ChatModel chatModel;
 
     @Autowired
     private ToolCallback[] allTools;
@@ -86,13 +86,13 @@ public class PlanExecute {
     /** wave 子任务线程池（见 AsyncConfig.waveExecutor），与 SSE 主任务池隔离，避免嵌套提交死锁 */
     private final Executor waveExecutor;
 
-    public PlanExecute(OpenAiChatModel openAiChatModel,
+    public PlanExecute(ChatModel chatModel,
                        AgentFactory agentFactory,
                        @Qualifier("waveExecutor") Executor waveExecutor) throws IOException {
-        this.openAiChatModel = openAiChatModel;
+        this.chatModel = chatModel;
         this.agentFactory = agentFactory;
         this.waveExecutor = waveExecutor;
-        this.chatClient = ChatClient.builder(openAiChatModel)
+        this.chatClient = ChatClient.builder(chatModel)
                 .defaultAdvisors(
                 new MyLoggerAdvisor()
         ).build();
