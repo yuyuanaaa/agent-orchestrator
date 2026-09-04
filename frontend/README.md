@@ -1,6 +1,6 @@
 # AI 智能体对话前端
 
-基于后端 [sky-take-out-AI](../AiProject-master) 的接口契约，用 Vue 3 + Vite + TypeScript + Element Plus + Pinia 构建。
+基于后端 [agent-orchestrator](../) 的接口契约，用 Vue 3 + Vite + TypeScript + Element Plus + Pinia 构建。
 
 ## 技术栈
 
