@@ -1,0 +1,7 @@
+target/
+tmp/
+.git/
+.idea/
+.mvn/wrapper/maven-wrapper.jar
+src/main/resources/secrets.yaml
+*.log

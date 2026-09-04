@@ -1,6 +1,7 @@
 server:
   port: ${SERVER_PORT:8080}
   servlet:
+    context-path: /api
     encoding:
       charset: UTF-8
       enabled: true
@@ -12,7 +13,7 @@ server:
 
 spring:
   application:
-    name: sky-take-out-AI
+    name: agent-orchestrator
   # 本地开发时可在 src/main/resources/secrets.yaml 中覆盖下面的环境变量（该文件已被 .gitignore 忽略）；
   # 使用 optional: 前缀，文件不存在时不会导致启动失败
   config:
@@ -48,7 +49,7 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/sky_take_out_ai?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/agent_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true}
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:}
 
@@ -68,12 +69,12 @@ springdoc:
   group-configs:
     - group: 'default'
       paths-to-match: '/**'
-      packages-to-scan: com.kanodays88.skytakeoutai.controller
+      packages-to-scan: com.kanodays88.agentplatform.controller
 
 logging:
   level:
     org.springframework.ai.chat.client.advisor: debug
-    com.kanodays88.skytakeoutai: debug
+    com.kanodays88.agentplatform: debug
 
 app:
   # 部署在反向代理之后且代理统一加 /api 前缀时才需要配置；本地直连保持为空
@@ -82,3 +83,7 @@ app:
   baidu:
     api:
       key: ${BAIDU_API_KEY:}
+  # 管理员用户名白名单（逗号分隔）：登录/注册这些用户名即获得管理后台权限。
+  # 生产环境务必改成你自己的账号，或用环境变量 ADMIN_USERNAMES 覆盖。
+  admin:
+    usernames: ${ADMIN_USERNAMES:admin}

@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.kanodays88</groupId>
-    <artifactId>sky-take-out-AI</artifactId>
+    <artifactId>agent-orchestrator</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>sky-take-out-AI</name>
-    <description>sky-take-out-AI</description>
+    <name>agent-orchestrator</name>
+    <description>agent-orchestrator</description>
     <url/>
     <licenses>
         <license/>
@@ -193,6 +193,23 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!--
+              让以 *Benchmark.java 结尾的性能基准测试也被 Surefire 默认包含，
+              否则 mvnw test 只会跑 *Test.java / *Tests.java / *TestCase.java，
+              错过 benchmark 包里的基准测试。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                        <include>**/*TestCase.java</include>
+                        <include>**/*Benchmark.java</include>
+                    </includes>
+                </configuration>
             </plugin>
         </plugins>
     </build>

@@ -1,0 +1,22 @@
+package com.kanodays88.agentplatform.entity.vo;
+
+import lombok.Data;
+import org.springframework.ai.tool.annotation.ToolParam;
+
+import java.math.BigDecimal;
+
+@Data
+public class DishVO {
+    @ToolParam(description = "菜品名称")
+    private String name;
+    @ToolParam(description = "菜品价格")
+    private BigDecimal price;
+    @ToolParam(description = "菜品分类名")
+    private String categoryName;
+    @ToolParam(description = "菜品图片链接")
+    private String image;
+    @ToolParam(description = "菜品描述信息")
+    private String description;
+    @ToolParam(description = "售卖状态：0 停售，1 起售")
+    private Integer status;
+}
