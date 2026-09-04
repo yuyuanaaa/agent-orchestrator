@@ -108,15 +108,14 @@ ChatController ──► RouterAgent（两次 LLM 调用）
 
 ### 方式一：Docker 一键部署（推荐）
 
-前置：安装 Docker 与 Docker Compose（v2.20+）。编排文件位于仓库**上一级目录**（`../docker-compose.yml`，
-与 `frontend/` 同级，用于同时编排后端与前端）。
+前置：安装 Docker 与 Docker Compose（v2.20+）。编排文件位于仓库根目录 `./docker-compose.yml`，与前端 `frontend/` 同级（后端即为本仓库根目录，含 `pom.xml` / `src/` / `Dockerfile`），用于同时编排后端与前端。
 
 ```bash
 # 1. 配置密钥
-cp ../.env.example ../.env      # 编辑 .env 填入 DASHSCOPE_API_KEY（必填）
+cp .env.example .env      # 编辑 .env 填入 DASHSCOPE_API_KEY（必填）
 
 # 2. 一键构建并启动 MySQL + Redis + 后端 + 前端
-cd .. && docker compose up -d --build
+docker compose up -d --build
 
 # 3. 查看状态与日志
 docker compose ps
@@ -236,7 +235,7 @@ mvn package -DskipTests && java -jar target/agent-orchestrator-0.0.1-SNAPSHOT.ja
 ## 目录结构
 
 ```
-src/main/java/com/kanodays88/agentplatform/
+src/main/java/com/agentorchestrator/platform/
 ├── agent/
 │   ├── BaseAgent / ReActAgent / ToolCallAgent / PlanAgent         # 智能体继承体系
 │   ├── plan/      # PlanExecute 规划执行 + SubTask 子任务契约

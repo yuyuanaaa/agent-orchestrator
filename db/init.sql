@@ -1,6 +1,6 @@
 -- =====================================================================
 -- agent-orchestrator 建库建表脚本（MySQL 8.0+）
--- 表结构依据 src/main/java/com/kanodays88/agentplatform/entity 下的实体类生成，
+-- 表结构依据 src/main/java/com/agentorchestrator/platform/entity 下的实体类生成，
 -- 字段命名遵循 MyBatis-Plus 驼峰 → 下划线映射约定。
 -- =====================================================================
 
