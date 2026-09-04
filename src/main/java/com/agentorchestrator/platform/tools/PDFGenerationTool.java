@@ -11,9 +11,9 @@ import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Image;
 import com.itextpdf.layout.element.Paragraph;
-import com.agentorchestrator.platform.constant.FileConstant;
 import com.agentorchestrator.platform.content.BaseContent;
 import com.agentorchestrator.platform.utils.HttpPathUtil;
+import com.agentorchestrator.platform.utils.UserFilePath;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -68,8 +68,11 @@ public class PDFGenerationTool {
         if (fileName == null || fileName.isBlank()) return "Error: File name is required.";
         if (content == null) return "Error: Content cannot be null.";
 
-        String fileDir = Paths.get(FileConstant.FILE_SAVE_DIR,BaseContent.getUser().getUserName(),BaseContent.getChatId(),"file").toString();
-        String filePath = Paths.get(fileDir,fileName).toString();
+        // fileName 来自 LLM @ToolParam，视为不可信输入：先白名单校验 userName/chatId，
+        // 再 resolve 文件路径到 /file/ 子目录下，挡住 ../、绝对路径、盘符等逃逸
+        String filePath = UserFilePath.resolveInSessionDir(
+                BaseContent.getUser().getUserName(), BaseContent.getChatId(), fileName).toString();
+        String fileDir = Paths.get(filePath).getParent().toString();
         try {
             FileUtil.mkdir(fileDir);
             try (PdfWriter writer = new PdfWriter(filePath);
