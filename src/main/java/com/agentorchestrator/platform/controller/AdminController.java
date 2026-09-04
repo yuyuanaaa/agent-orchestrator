@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -241,6 +242,7 @@ public class AdminController {
     }
 
     @PostMapping("/setmeal")
+    @Transactional
     public Result<Void> addSetmeal(@RequestBody SetmealAdminDTO dto) {
         validateSetmeal(dto);
         dto.setId(null);
@@ -250,6 +252,7 @@ public class AdminController {
     }
 
     @PutMapping("/setmeal")
+    @Transactional
     public Result<Void> updateSetmeal(@RequestBody SetmealAdminDTO dto) {
         if (dto.getId() == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "缺少套餐 id");
@@ -281,7 +284,14 @@ public class AdminController {
         }
     }
 
-    /** 保存套餐并重建套餐-菜品关联（先删旧关联，再插入新关联） */
+    /**
+     * 保存套餐并重建套餐-菜品关联（先删旧关联，再插入新关联）。
+     * <p>
+     * 事务由两个 public 入口 {@link #addSetmeal} / {@link #updateSetmeal} 上的
+     * {@code @Transactional} 保证——本方法是 private，Spring AOP 代理无法拦截
+     * 类内部自调用，直接在这里加 {@code @Transactional} 不会生效。主表保存 +
+     * 关联重建两步在同一事务内，任一步失败整体回滚，不留下脏数据。
+     */
     private void saveSetmeal(SetmealAdminDTO dto) {
         Setmeal setmeal = new Setmeal();
         setmeal.setId(dto.getId());

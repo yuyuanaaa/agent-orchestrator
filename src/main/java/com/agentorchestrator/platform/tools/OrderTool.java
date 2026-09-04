@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 订单工具：下单、查询、删除。
@@ -96,8 +97,9 @@ public class OrderTool {
         }
 
         Orders orders = new Orders();
-        // 订单号：时间戳 + 用户 id，避免同一毫秒内不同用户订单号冲突
-        orders.setNumber(System.currentTimeMillis() + "-" + user.getId());
+        // 订单号：UUID（去连字符），并发下唯一，不再用「时间戳+userId」这种伪唯一组合
+        // （同一用户同一毫秒并发下单会撞号）
+        orders.setNumber(UUID.randomUUID().toString().replace("-", ""));
         orders.setAddress(orderQuery.getAddress());
         orders.setPhone(orderQuery.getPhone());
         orders.setRemark(orderQuery.getRemark());

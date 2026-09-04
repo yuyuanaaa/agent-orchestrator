@@ -24,7 +24,7 @@ CREATE TABLE `user` (
     `delete_id`   INT          DEFAULT 0 COMMENT '删除标识',
     `version`     INT          DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (`id`),
-    KEY `idx_user_name` (`name`)
+    UNIQUE KEY `uk_user_name` (`name`)
 ) ENGINE = InnoDB COMMENT ='用户信息';
 
 -- ---------------------------------------------------------------------
@@ -67,7 +67,7 @@ CREATE TABLE `dish` (
     `version`     INT           DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (`id`),
     KEY `idx_dish_category` (`category_id`),
-    KEY `idx_dish_name` (`name`)
+    UNIQUE KEY `uk_dish_name` (`name`)
 ) ENGINE = InnoDB COMMENT ='菜品';
 
 -- ---------------------------------------------------------------------
@@ -90,7 +90,7 @@ CREATE TABLE `setmeal` (
     `version`     INT           DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (`id`),
     KEY `idx_setmeal_category` (`category_id`),
-    KEY `idx_setmeal_name` (`name`)
+    UNIQUE KEY `uk_setmeal_name` (`name`)
 ) ENGINE = InnoDB COMMENT ='套餐';
 
 -- ---------------------------------------------------------------------
@@ -144,7 +144,7 @@ CREATE TABLE `orders` (
     `delete_id`               INT           DEFAULT 0 COMMENT '删除标识',
     `version`                 INT           DEFAULT 0 COMMENT '乐观锁版本号',
     PRIMARY KEY (`id`),
-    KEY `idx_orders_number` (`number`),
+    UNIQUE KEY `uk_orders_number` (`number`),
     KEY `idx_orders_user` (`user_id`),
     KEY `idx_orders_phone` (`phone`)
 ) ENGINE = InnoDB COMMENT ='订单';
