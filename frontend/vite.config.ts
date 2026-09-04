@@ -23,4 +23,20 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // 拆包策略：把核心依赖从主包中分离出来，主包只保留业务代码。
+    // 这样首页只下载 ~80KB 的业务代码 + 并行下载几个 vendor chunk，
+    // 第三方依赖变更不再影响主包 hash（缓存更友好），TTI 也显著缩短。
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-vue': ['vue', 'vue-router', 'pinia'],
+          'vendor-element-plus': ['element-plus', '@element-plus/icons-vue'],
+          'vendor-http': ['axios'],
+        },
+      },
+    },
+    // 主包目标 < 500KB（vite 默认警告阈值）
+    chunkSizeWarningLimit: 500,
+  },
 })
