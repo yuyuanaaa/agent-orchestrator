@@ -266,7 +266,7 @@ src/main/java/com/agentorchestrator/platform/
 
 ## 测试
 
-共 31 个测试（含 3 个性能基准），全部不依赖外部 LLM / 真实 MySQL，可一键复跑：
+共 38 个测试（含 3 个性能基准），绝大部分不依赖外部 LLM / 真实 MySQL，可一键复跑：
 
 ```bash
 ./mvnw test
@@ -280,6 +280,8 @@ src/main/java/com/agentorchestrator/platform/
 | `DishToolTest` | 4 | 类别名批量回填（N+1 修复回归）、id 去重、空结果不查库 |
 | `MenuCacheServiceTest` | 5 | SCAN 替代 KEYS、连带失效策略、空 key 不删、Redis 异常降级 |
 | `WebSearchToolTest` | 1 | 联网搜索工具加载冒烟 |
+| `ChatRateLimiterTest` | 4 | 阈值放行 / 超限拒绝 / Redis 异常降级 / 首次计数设过期 |
+| `LLMCircuitBreakerTest` | 3 | 连续失败熔断 / 成功复位 / 无失败时正常 |
 | `AgentPlatformApplicationTests` | 1 | Spring 上下文冒烟（需本地 MySQL/Redis/模型 Key） |
 | `TopologyParallelBenchmark` | 1 | 拓扑并行加速比（性能基准） |
 | `SkillTokenBenchmark` | 1 | 三层技能加载 token 节省（性能基准） |
@@ -294,3 +296,50 @@ src/main/java/com/agentorchestrator/platform/
 | `CacheScanBenchmark` | 5,000 key 批量失效，SCAN 8ms / KEYS 4ms（KEYS 阻塞 Redis 主线程） | 触发但不通过，SCAN 才是正确默认 |
 
 三个基准与 Surefire `**/*Benchmark.java` 已纳入 `mvn test` 日常回归，CI 跑全量测试时同时验证。
+
+> P95 / TPS / 单机容量等真实流量级数字需本地起 MySQL+Redis 后用 JMeter 打 `/ai/shop/dish/list` 取，
+> 本机无 docker 时无法产出；详见下文「本地压测」一节。
+
+## 免 Key 演示：Mock Profile
+
+为让面试官 clone 仓库后**无需任何 API Key 即可跑通「路由 → 规划 → 执行 → 蒸馏 → 汇总」完整链路**，
+内置了 mock profile：使用 `MockChatModel` / `MockEmbeddingModel` 顶替真实模型，
+输出固定占位文案（标注 `[Mock 模式]`）。
+
+启动方式：
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=mock
+# 或编译后
+java -jar target/agent-orchestrator-0.0.1-SNAPSHOT.jar --spring.profiles.active=mock
+```
+
+> 仍需本地 MySQL（端口 3306）与 Redis（6379），但不需要 DashScope API Key。
+> MySQL/Redis 也可走 Docker：`docker compose up -d mysql redis`（compose 文件已包含）。
+> mock 模式下 RAG 检索与联网搜索为占位（向量为全零），但对话链路完整贯通。
+
+## 本地压测（产出 P95 / TPS / 命中率）
+
+完整压测需本地起 MySQL + Redis + 后端（mock 或真实模式均可），打 `/ai/shop/dish/list` 与 `/ai/chat/**`，
+记录 P95 / 缓存命中率 / 单机稳定并发数。推荐步骤：
+
+```bash
+# 1. 起依赖
+docker compose up -d mysql redis
+# 2. 初始化数据（首次）
+docker exec -i mysql mysql -uroot -p<pwd> < db/init.sql
+# 3. 起后端（mock profile 免 Key）
+./mvnw spring-boot:run -Dspring-boot.run.profiles=mock
+# 4. 准备压测工具
+brew install jmeter      # 或 apt install jmeter
+# 5. 编写 /ai/shop/dish/list 的 jmx 脚本：100 并发 / 持续 5 分钟 / 1000 总请求
+# 6. 跑压测后从 jmeter-report/index.html 取 P95 / P99 / TPS
+# 7. 取缓存命中率：redis-cli info stats | grep keyspace_hits / keyspace_misses
+```
+
+建议的压测目标（简历量化指标）：
+- `/ai/shop/dish/list`（走 Cache-Aside，缓存命中后 P95 应在 5ms 以内）
+- `/ai/chat/{msg}`（走 SSE 智能体，限流 30 req/min/user）
+- 200 并发用户持续 5 分钟，关注 P95 / 错误率 / CPU
+
+压测出的真实数字回填到简历「七、量化指标」对应行即可。
