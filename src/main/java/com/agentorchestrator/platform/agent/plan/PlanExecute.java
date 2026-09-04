@@ -122,6 +122,8 @@ public class PlanExecute {
         //ConcurrentHashMap线程安全hashMap，内部使用乐观锁或悲观锁的形式实现线程安全
         //原理简单来说就是put操作时，对对应的hash桶上锁，写入操作完成后才释放锁供其他线程操作
         ConcurrentHashMap<Integer, DistilledResult> resultMap = new ConcurrentHashMap<>();
+        // 记录失败子任务（taskId -> 错误信息），供 fuseResults 汇总时显式标注，避免静默吞掉
+        ConcurrentHashMap<Integer, String> failedTasks = new ConcurrentHashMap<>();
         List<Set<Integer>> waves = buildExecutionWaves(subTasks);
         Map<Integer, SubTask> taskMap = subTasks.stream()
                 .collect(Collectors.toMap(SubTask::taskId, Function.identity()));
@@ -174,6 +176,10 @@ public class PlanExecute {
                             resultMap.put(task.taskId(), distilledResult);
                         } catch (Exception e) {
                             log.error("[Optimize] Subtask {} failed: {}", task.taskId(), e.getMessage());
+                            // 失败可见性：记录失败信息 + 推 SSE 错误事件，避免用户收到「少了几条但看似完整」的报告
+                            String errMsg = "【任务" + task.taskId() + "「" + task.taskName() + "」失败：" + e.getMessage() + "】";
+                            failedTasks.put(task.taskId(), errMsg);
+                            SSESend.sendEventResult(emitter, "\n" + errMsg + "\n");
                         } finally {
                             //删除ThreadLocal防止内存泄露与线程复用串号
                             BaseContent.removeChatId();
@@ -194,7 +200,7 @@ public class PlanExecute {
                 .map(t -> resultMap.get(t.taskId()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        String s = fuseResults(originalTask, orderedResults);
+        String s = fuseResults(originalTask, orderedResults, failedTasks);
         log.info("[Phase] fuseResults took {} ms", System.currentTimeMillis() - tFuse);
         log.info("[Phase] TOTAL planExecute took {} ms", System.currentTimeMillis() - overallStart);
         return s;
@@ -401,8 +407,12 @@ public class PlanExecute {
     }
 
     //整合结果集和意图，得到最终结果
-    private String fuseResults(String task, List<DistilledResult> subTaskResults) {
+    private String fuseResults(String task, List<DistilledResult> subTaskResults, Map<Integer, String> failedTasks) {
         List<String> results = subTaskResults.stream().map(s -> s.structuredCoreResult()).collect(Collectors.toList());
+        // 失败任务显式标注：把失败信息作为一段独立上下文喂给汇总 LLM，
+        // 让最终报告能明确告知用户「哪些子任务失败、原因是什么」，而非静默缺失
+        String failedSection = failedTasks.isEmpty() ? "" : "\n【失败任务】（务必在报告中向用户明确说明这些任务未完成及原因）：\n"
+                + String.join("\n", failedTasks.values());
         String prompt = """
             {role}
             基于以下子任务的执行结果，整合成最终完整的任务报告返回给用户。
@@ -410,13 +420,15 @@ public class PlanExecute {
             【核心目标】：{mainGoal}
             【子任务结果列表】：
             {subTaskResults}
+            {failedSection}
             """;
 
         return chatClient.prompt()
                 .system(s -> s.text(prompt)
                         .param("role",ChatSystem.CHAT_SYSTEM)
                         .param("mainGoal", task)
-                        .param("subTaskResults", String.join("\n---\n", results)))
+                        .param("subTaskResults", String.join("\n---\n", results))
+                        .param("failedSection", failedSection))
                 .call()
                 .content();
     }
