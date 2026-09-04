@@ -69,12 +69,12 @@ springdoc:
   group-configs:
     - group: 'default'
       paths-to-match: '/**'
-      packages-to-scan: com.kanodays88.agentplatform.controller
+      packages-to-scan: com.agentorchestrator.platform.controller
 
 logging:
   level:
     org.springframework.ai.chat.client.advisor: debug
-    com.kanodays88.agentplatform: debug
+    com.agentorchestrator.platform: debug
 
 app:
   # 部署在反向代理之后且代理统一加 /api 前缀时才需要配置；本地直连保持为空

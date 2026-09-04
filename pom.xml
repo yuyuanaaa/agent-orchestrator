@@ -8,7 +8,7 @@
         <version>3.5.13</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>com.kanodays88</groupId>
+    <groupId>com.agentorchestrator</groupId>
     <artifactId>agent-orchestrator</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>agent-orchestrator</name>
