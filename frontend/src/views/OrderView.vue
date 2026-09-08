@@ -26,6 +26,27 @@ function itemsOf(o: OrderVO): OrderItem[] {
   return arr
 }
 
+const statusTextMap: Record<number, string> = {
+  1: '待付款',
+  2: '待接单',
+  3: '已接单',
+  4: '派送中',
+  5: '已完成',
+  6: '已取消',
+  7: '退款',
+}
+
+function statusText(status?: number): string {
+  return status == null ? '' : (statusTextMap[status] ?? '未知状态')
+}
+
+function statusType(status?: number): 'info' | 'warning' | 'success' | 'danger' {
+  if (status === 6) return 'info'
+  if (status === 7) return 'danger'
+  if (status === 5) return 'success'
+  return 'warning'
+}
+
 async function load() {
   loading.value = true
   try {
@@ -54,6 +75,9 @@ onMounted(load)
           <div class="order-no">
             <span class="no-label">订单号</span>
             <span class="no-value">{{ o.number }}</span>
+            <el-tag v-if="o.status" :type="statusType(o.status)" size="small" effect="plain">
+              {{ statusText(o.status) }}
+            </el-tag>
           </div>
           <span class="order-time">{{ o.orderTime }}</span>
         </div>

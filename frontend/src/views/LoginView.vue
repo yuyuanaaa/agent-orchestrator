@@ -20,6 +20,11 @@ async function handleLogin() {
     ElMessage.warning('请输入用户名和密码')
     return
   }
+  // 与后端 UserFilePath 白名单保持一致：用户名仅支持字母/数字/下划线/短横线（1-64 位）
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(form.userName.trim())) {
+    ElMessage.warning('用户名仅支持字母、数字、下划线、短横线（1-64 位）')
+    return
+  }
   loading.value = true
   try {
     const vo = await login({ userName: form.userName.trim(), password: form.password })

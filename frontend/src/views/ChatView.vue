@@ -189,7 +189,10 @@ async function send() {
         sidebarRef.value?.loadList?.()
       },
       onError: (err) => {
-        ElMessage.error('对话失败：' + err.message)
+        // 401（未登录 / token 过期）已在 sse 层统一跳转登录页，这里不重复弹提示
+        if ((err as Error & { status?: number }).status !== 401) {
+          ElMessage.error('对话失败：' + err.message)
+        }
         sending.value = false
       },
     })
