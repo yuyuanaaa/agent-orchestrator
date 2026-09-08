@@ -12,6 +12,7 @@ import com.agentorchestrator.platform.entity.vo.UserLoginVO;
 import com.agentorchestrator.platform.exception.BusinessException;
 import com.agentorchestrator.platform.service.UserService;
 import com.agentorchestrator.platform.mapper.UserMapper;
+import com.agentorchestrator.platform.utils.UserFilePath;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -57,7 +58,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         List<User> existUsers = query().eq("name", userLoginDTO.getUserName()).list();
         User user;
         if (existUsers == null || existUsers.isEmpty()) {
-            // 用户名未占用，直接注册
+            // 用户名未占用，直接注册。
+            // 注册即创建账号，用户名必须满足文件路径白名单 [A-Za-z0-9_-]（与 UserFilePath 单一来源一致），
+            // 否则登录后上传 PDF / 生成 PDF / 删除会话等文件操作会因路径不合法而全部失败。
+            UserFilePath.validateUserName(userLoginDTO.getUserName());
             user = new User();
             user.setName(userLoginDTO.getUserName());
             user.setPhone(userLoginDTO.getPhone());

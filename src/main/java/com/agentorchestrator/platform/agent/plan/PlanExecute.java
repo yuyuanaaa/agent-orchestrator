@@ -127,12 +127,21 @@ public class PlanExecute {
         List<Set<Integer>> waves = buildExecutionWaves(subTasks);
         Map<Integer, SubTask> taskMap = subTasks.stream()
                 .collect(Collectors.toMap(SubTask::taskId, Function.identity()));
+        // 记录每个任务依赖的上游任务，用于在波次间跳过“上游已失败”的下游任务
+        Map<Integer, Set<Integer>> dependsOn = buildDependsOnMap(subTasks);
 
         for (Set<Integer> waveTaskIds : waves) {
             //本波次的异步任务集合，提交到共享线程池（见 AsyncConfig）
             List<CompletableFuture<Void>> futures = new ArrayList<>();
             for (int taskId : waveTaskIds) {
                 SubTask task = taskMap.get(taskId);
+                if (task != null && hasFailedUpstream(task.taskId(), dependsOn, failedTasks.keySet())) {
+                    String blockedMsg = "【任务" + task.taskId() + "「" + task.taskName() + "」因依赖的上游任务失败，已跳过】";
+                    failedTasks.putIfAbsent(task.taskId(), blockedMsg);
+                    log.warn("[Plan] 跳过依赖失败的任务: {}", task.taskName());
+                    SSESend.sendEventResult(emitter, "\n" + blockedMsg + "\n");
+                    continue;
+                }
                 //从共享线程池中创建异步任务，并加入到集合
                 futures.add(CompletableFuture.runAsync(() -> {
                         //将主线程上下文设置到当前线程上下文
@@ -281,24 +290,12 @@ public class PlanExecute {
      * @return
      */
     List<Set<Integer>> buildExecutionWaves(List<SubTask> subTasks) {
-        // dependsOn: for each task, which upstream taskIds it depends on
-        Map<Integer, Set<Integer>> dependsOn = new HashMap<>();
         Map<Integer, SubTask> taskMap = new HashMap<>();
 
         for (SubTask task : subTasks) {
             taskMap.put(task.taskId(), task);
-            dependsOn.put(task.taskId(), new HashSet<>());
         }
-
-        // For each task, find tasks whose downstreamTaskIds contain this task's ID
-        // Those are the tasks this task depends on
-        for (SubTask task : subTasks) {
-            for (SubTask other : subTasks) {
-                if (other.downstreamTaskIds().contains(task.taskId())) {
-                    dependsOn.get(task.taskId()).add(other.taskId());
-                }
-            }
-        }
+        Map<Integer, Set<Integer>> dependsOn = buildDependsOnMap(subTasks);
 
         List<Set<Integer>> waves = new ArrayList<>();
         Set<Integer> remaining = new HashSet<>(taskMap.keySet());
@@ -326,6 +323,34 @@ public class PlanExecute {
         }
 
         return waves;
+    }
+
+    /**
+     * 构建“任务 -> 上游任务集合”的依赖映射：
+     * 若 other.downstreamTaskIds 包含 taskId，则 taskId 依赖 other。
+     * 供波次构建与失败传播共用，避免两处各自推导而出现不一致。
+     */
+    private Map<Integer, Set<Integer>> buildDependsOnMap(List<SubTask> subTasks) {
+        Map<Integer, Set<Integer>> dependsOn = new HashMap<>();
+        for (SubTask task : subTasks) {
+            dependsOn.put(task.taskId(), new HashSet<>());
+        }
+        for (SubTask task : subTasks) {
+            for (SubTask other : subTasks) {
+                if (other.downstreamTaskIds().contains(task.taskId())) {
+                    dependsOn.get(task.taskId()).add(other.taskId());
+                }
+            }
+        }
+        return dependsOn;
+    }
+
+    /**
+     * 判断某任务是否依赖一个已经失败的任务。包可见以便单元测试直接覆盖。
+     */
+    boolean hasFailedUpstream(int taskId, Map<Integer, Set<Integer>> dependsOn, Set<Integer> failedTaskIds) {
+        if (failedTaskIds == null || failedTaskIds.isEmpty()) return false;
+        return dependsOn.getOrDefault(taskId, Set.of()).stream().anyMatch(failedTaskIds::contains);
     }
 
 //    /**
@@ -431,7 +456,6 @@ public class PlanExecute {
     }
 
 }
-
 
 
 

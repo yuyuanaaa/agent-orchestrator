@@ -2,12 +2,12 @@ package com.agentorchestrator.platform.controller;
 
 import com.agentorchestrator.platform.common.ErrorCode;
 import com.agentorchestrator.platform.common.Result;
-import com.agentorchestrator.platform.constant.FileConstant;
 import com.agentorchestrator.platform.content.BaseContent;
 import com.agentorchestrator.platform.entity.dto.UserLoginDTO;
 import com.agentorchestrator.platform.entity.vo.FileUploadVO;
 import com.agentorchestrator.platform.exception.BusinessException;
 import com.agentorchestrator.platform.service.FileUploadService;
+import com.agentorchestrator.platform.utils.UserFilePath;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,7 +28,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -77,7 +76,9 @@ public class FileUploadController {
         if (user == null || user.getUserName() == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "请先登录");
         }
-        File dir = Paths.get(FileConstant.FILE_SAVE_DIR, user.getUserName(), chatId).toFile();
+        // 统一走 UserFilePath 白名单校验（userName + chatId），
+        // 避免 chatId 传 ../ 等片段越界枚举其他目录文件名
+        File dir = UserFilePath.resolveSessionDir(user.getUserName(), chatId).toFile();
         if (!dir.exists() || !dir.isDirectory()) {
             return Result.success(List.of());
         }
@@ -131,8 +132,9 @@ public class FileUploadController {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "非法文件名");
         }
 
-        Path baseDir = Paths.get(FileConstant.FILE_SAVE_DIR, user.getUserName(), chatId)
-                .toAbsolutePath().normalize();
+        // 统一走 UserFilePath 白名单校验（userName + chatId），
+        // 再对文件名做穿越校验，杜绝 chatId=../.. + fileName 越权读取他人/服务器文件
+        Path baseDir = UserFilePath.resolveSessionDir(user.getUserName(), chatId);
         Path filePath = baseDir.resolve(fileName).normalize();
         if (!filePath.startsWith(baseDir)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "非法文件路径");

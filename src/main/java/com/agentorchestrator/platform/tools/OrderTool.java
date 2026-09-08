@@ -95,6 +95,12 @@ public class OrderTool {
         if (!hasDish && !hasSetmeal) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "订单至少需要包含一个菜品或套餐");
         }
+        if (orderQuery.getAddress() == null || orderQuery.getAddress().isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "订单缺少配送地址");
+        }
+        if (orderQuery.getPhone() == null || orderQuery.getPhone().isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "订单缺少联系电话");
+        }
 
         Orders orders = new Orders();
         // 订单号：UUID（去连字符），并发下唯一，不再用「时间戳+userId」这种伪唯一组合
@@ -106,6 +112,9 @@ public class OrderTool {
         orders.setOrderTime(LocalDateTime.now());
         orders.setUserId(user.getId());
         orders.setAddressBookId(-1L);
+        orders.setStatus(1); // 新订单：待付款
+        orders.setPayStatus(0); // 未支付
+        orders.setUserName(user.getUserName());
 
         // 服务端按名称回查数据库，拿到真实单价/图片/主键，不信任模型传入的价格（防止模型算错价或虚构菜品）
         Map<String, Dish> dishMap = loadDishes(orderQuery.getDishesName());
@@ -244,12 +253,17 @@ public class OrderTool {
         }
     }
 
-    @Tool(description = "查询订单工具，只返回当前登录用户自己的订单，可按电话号码过滤")
-    public List<OrderVO> queryOrder(@ToolParam(description = "用于查询订单的电话号码，可选") String phone) {
+    @Tool(description = "查询订单工具，只返回当前登录用户自己的订单，可按订单号或电话号码过滤")
+    public List<OrderVO> queryOrder(
+            @ToolParam(description = "要查询的订单号，可选；不传则返回该用户全部订单") String orderNumber,
+            @ToolParam(description = "用于辅助过滤的电话号码，可选") String phone) {
         UserLoginDTO user = currentUser();
 
         // 归属校验：只查当前用户自己的订单，phone 仅作为附加过滤条件
         var query = ordersServiceImpl.query().eq("user_id", user.getId());
+        if (orderNumber != null && !orderNumber.isBlank()) {
+            query.eq("number", orderNumber);
+        }
         if (phone != null && !phone.isBlank()) {
             query.eq("phone", phone);
         }
@@ -262,9 +276,9 @@ public class OrderTool {
         return orderVOS;
     }
 
-    @Tool(description = "删除订单工具，会返回删除的订单的信息，只能删除当前登录用户自己的订单")
+    @Tool(description = "取消订单工具，将订单标记为已取消并保留明细，只能取消当前登录用户自己的订单")
     @Transactional
-    public OrderVO removeOrder(@ToolParam(description = "删除订单对应的订单号") String orderNumber) {
+    public OrderVO cancelOrder(@ToolParam(description = "要取消的订单号") String orderNumber) {
         UserLoginDTO user = currentUser();
 
         List<Orders> orders = ordersServiceImpl.query().eq("number", orderNumber).list();
@@ -276,16 +290,33 @@ public class OrderTool {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权操作他人的订单");
         }
 
+        if (target.getStatus() != null && target.getStatus() == 6) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "订单已取消，无需重复操作");
+        }
+        if (target.getStatus() != null && target.getStatus() == 7) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "订单已退款，无法取消");
+        }
+        if (target.getStatus() != null && target.getStatus() >= 4) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "订单已开始配送或已完成，无法取消");
+        }
+
         List<OrderDetail> orderDetails = orderDetailServiceImpl.query().eq("order_id", target.getId()).list();
 
-        LambdaUpdateWrapper<OrderDetail> wrapper = new LambdaUpdateWrapper<>();
-        int rows = orderDetailMapper.delete(wrapper.eq(OrderDetail::getOrderId, target.getId()));
-        if (rows <= 0) throw new BusinessException(ErrorCode.SYSTEM_ERROR, "删除订单详细项失败");
+        LocalDateTime cancelTime = LocalDateTime.now();
+        // 乐观更新：带上原 status 作为条件，避免并发请求把同一订单重复取消
+        int rows = ordersMapper.update(null, new LambdaUpdateWrapper<Orders>()
+                .eq(Orders::getId, target.getId())
+                .eq(Orders::getStatus, target.getStatus() == null ? 1 : target.getStatus())
+                .set(Orders::getStatus, 6)
+                .set(Orders::getCancelTime, cancelTime)
+                .set(Orders::getCancelReason, "用户取消"));
+        if (rows <= 0) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "取消订单失败，请刷新后重试");
+        }
 
-        LambdaUpdateWrapper<Orders> wrapper1 = new LambdaUpdateWrapper<>();
-        rows = ordersMapper.delete(wrapper1.eq(Orders::getNumber, orderNumber));
-        if (rows <= 0) throw new BusinessException(ErrorCode.SYSTEM_ERROR, "删除订单失败");
-
+        target.setStatus(6);
+        target.setCancelTime(cancelTime);
+        target.setCancelReason("用户取消");
         return toOrderVO(target, orderDetails);
     }
 

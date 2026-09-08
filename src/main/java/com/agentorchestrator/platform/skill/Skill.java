@@ -95,7 +95,11 @@ public class Skill {
             sb.append("| 参数名 | 类型 | 说明 |\n");
             sb.append("|--------|------|------|\n");
             for (SkillParameter p : parameters) {
-                sb.append("| ").append(p.getName()).append(" | ").append(p.getType()).append(" | ").append(p.getDescription()).append(" |\n");
+                String importance = p.getImportance() == null || p.getImportance().isBlank()
+                        ? "medium" : p.getImportance().trim();
+                sb.append("| ").append(p.getName()).append(" | ").append(p.getType())
+                        .append(" | ").append(p.getDescription())
+                        .append(" (importance: ").append(importance).append(") |\n");
             }
             sb.append("\n");
         }

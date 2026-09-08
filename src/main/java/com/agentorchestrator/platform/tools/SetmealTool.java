@@ -118,10 +118,23 @@ public class SetmealTool {
             setmealVO.setCategoryName(categoryNameMap.get(s.getCategoryId()));
             setmealVO.setDishesName(setmealDishesMap.getOrDefault(s.getId(), List.of()));
             // 拼接图片 URL —— 缓存的是拼好 URL 的最终结果，避免缓存与返回值不一致
-            setmealVO.setImage(HttpPathUtil.writeHttpUrl("/upload/" + setmealVO.getImage()));
+            setmealVO.setImage(toFullUrl(setmealVO.getImage()));
             setmealVOS.add(setmealVO);
         }
         return setmealVOS;
+    }
+
+    /**
+     * 相对路径拼完整 URL：null/空白/已含 http 原样返回，否则拼 /upload/ 前缀。
+     * <p>
+     * 与 {@code AdminController.toFullUrl} 语义保持一致，避免无图套餐被拼成
+     * {@code /upload/null} 导致前端展示破图；同时支持数据库中直接存完整外链的图片。
+     */
+    private String toFullUrl(String image) {
+        if (image == null || image.isBlank() || image.startsWith("http")) {
+            return image;
+        }
+        return HttpPathUtil.writeHttpUrl("/upload/" + image);
     }
 
     /**
