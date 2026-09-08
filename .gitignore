@@ -49,3 +49,12 @@ build/
 .vscode/
 
 .workbuddy
+
+### JMeter load-test artifacts ###
+jmeter/*.jtl
+jmeter/report/
+jmeter/report-*/
+jmeter/archive-*/
+jmeter/.redis-baseline*.json
+jmeter/summary.json
+jmeter/cold-vs-hot.json
