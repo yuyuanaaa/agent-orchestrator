@@ -53,15 +53,15 @@ ChatController ──► RouterAgent（两次 LLM 调用）
 
 | 技能 | 说明 |
 |---|---|
-| `commerce/query_dish_or_setmeal` | 查询菜品与套餐 |
+| `commerce/dish_and_setmeal_query` | 查询菜品与套餐 |
 | `commerce/place_order` | 下单 |
 | `commerce/query_order` | 查询订单 |
-| `commerce/cancel_order` | 取消/删除订单 |
+| `commerce/cancel_order` | 取消订单（保留订单与明细，状态流转为已取消） |
 | `travel_plan/make_travel_plan` | 出行规划（联网搜索示例） |
 
 ### 工具集（`@Tool`，Spring AI 自动注册）
 
-菜品查询、套餐查询、下单、查单、删单、联网搜索（内置 RAG 二次提纯）、
+菜品查询、套餐查询、下单、查单、取消订单（状态流转）、联网搜索（内置 RAG 二次提纯）、
 文件读写（会话目录隔离）、PDF 报告生成、资源下载、任务终止。
 
 ## 关键设计亮点

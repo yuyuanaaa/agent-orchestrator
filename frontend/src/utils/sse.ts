@@ -10,6 +10,8 @@
  *   3. 无显式结束标记，靠后端 emitter.complete() 关闭连接判定结束
  */
 
+import { handleUnauthorized } from '@/utils/auth'
+
 export interface SSEMessage {
   type: 'think' | 'result' | 'raw'
   data: string
@@ -57,7 +59,14 @@ export async function streamSSE(opts: SSEStreamOptions): Promise<() => void> {
         } catch {
           // 非 JSON 响应，保留默认状态码文案
         }
-        throw new Error(message)
+        // 未登录 / token 过期：统一清空登录态并跳转登录页
+        if (resp.status === 401) {
+          handleUnauthorized()
+        }
+        // 错误对象带上 status，让调用方（如 ChatView）可区分 401 与普通错误，避免重复提示
+        const err = new Error(message) as Error & { status?: number }
+        err.status = resp.status
+        throw err
       }
       if (!resp.body) {
         throw new Error('当前环境不支持 ReadableStream')

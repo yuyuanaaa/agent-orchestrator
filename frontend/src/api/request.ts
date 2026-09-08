@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { handleUnauthorized } from '@/utils/auth'
 import type { ApiResult } from '@/types'
 
 /**
@@ -43,13 +44,16 @@ instance.interceptors.response.use(
   },
   (error) => {
     const status = error.response?.status
+    // 未登录 / token 过期：统一清空登录态并跳转登录页，不再单独弹错误提示
+    if (status === 401) {
+      handleUnauthorized()
+      return Promise.reject(error)
+    }
     const message =
       error.response?.data?.message ||
-      (status === 401
-        ? '未登录或登录已过期，请重新登录'
-        : status === 404
-          ? '接口不存在'
-          : '网络请求失败')
+      (status === 404
+        ? '接口不存在'
+        : '网络请求失败')
     ElMessage.error(message)
     return Promise.reject(error)
   },

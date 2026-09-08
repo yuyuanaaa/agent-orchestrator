@@ -59,11 +59,14 @@ export interface SetmealVO {
 // 订单：对应 entity/vo/OrderVO.java
 export interface OrderVO {
   number: string
+  status?: number
   phone: string
   orderTime: string
   address: string
   amount: number
   remark?: string
+  cancelReason?: string
+  cancelTime?: string
   dishes: Record<string, number>
   dishesImage: Record<string, string>
   setmeals: Record<string, number>
