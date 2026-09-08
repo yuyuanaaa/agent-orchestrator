@@ -56,6 +56,6 @@ public class ShopController {
     /** 查询当前登录用户的全部订单（按时间倒序由前端排序） */
     @GetMapping("/order/list")
     public Result<List<OrderVO>> orderList() {
-        return Result.success(orderTool.queryOrder(null));
+        return Result.success(orderTool.queryOrder(null, null));
     }
 }

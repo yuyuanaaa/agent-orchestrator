@@ -13,6 +13,9 @@ public class OrderVO {
     //订单号
     private String number;
 
+    //订单状态：1待付款 2待接单 3已接单 4派送中 5已完成 6已取消 7退款
+    private Integer status;
+
     //电话号码
     private String phone;
 
@@ -28,6 +31,13 @@ public class OrderVO {
 
     //订单备注
     private String remark;
+
+    //订单取消原因
+    private String cancelReason;
+
+    //订单取消时间
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime cancelTime;
 
     //订单菜品，以及份数
     private Map<String,Integer> dishes;

@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -107,6 +108,19 @@ class PlanExecuteTest {
 
         assertEquals(1, waves.size());
         assertEquals(Set.of(1, 2), waves.get(0));
+    }
+
+    @Test
+    @DisplayName("上游任务失败时，依赖它的下游任务应被识别为阻塞")
+    void downstreamShouldBeBlockedWhenUpstreamFailed() {
+        java.util.Map<Integer, Set<Integer>> dependsOn = java.util.Map.of(
+                1, Set.of(),
+                2, Set.of(1),
+                3, Set.of(2));
+
+        assertTrue(planExecute.hasFailedUpstream(2, dependsOn, Set.of(1)));
+        assertTrue(planExecute.hasFailedUpstream(3, dependsOn, Set.of(1, 2)));
+        assertFalse(planExecute.hasFailedUpstream(1, dependsOn, Set.of(1)));
     }
 
     // ==================== extractSubTasks ====================

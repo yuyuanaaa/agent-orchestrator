@@ -134,6 +134,21 @@ class OrderToolTest {
     }
 
     @Test
+    @DisplayName("取消订单的状态与取消时间应随订单主信息一起返回")
+    void shouldCarryCancelStateIntoOrderVO() {
+        Orders canceled = sampleOrder();
+        canceled.setStatus(6);
+        canceled.setCancelReason("用户取消");
+        canceled.setCancelTime(LocalDateTime.of(2026, 9, 5, 12, 0));
+
+        OrderVO vo = orderTool.toOrderVO(canceled, List.of());
+
+        assertEquals(6, vo.getStatus());
+        assertEquals("用户取消", vo.getCancelReason());
+        assertNotNull(vo.getCancelTime());
+    }
+
+    @Test
     @DisplayName("多个菜品与多个套餐混合时应全部回填，不互相覆盖")
     void shouldFillMultipleItemsWithoutOverwriting() {
         List<OrderDetail> details = List.of(

@@ -202,11 +202,19 @@ public class ChatController {
      */
     @DeleteMapping("/history/{chatId}")
     public Result<String> historyRemove(@PathVariable("chatId") String chatId) throws IOException {
+        String userName = currentUserName();
+        // chatId 来自 @PathVariable，先白名单校验再做任何删除，避免失败前已清掉 Redis 记忆
+        UserFilePath.validateChatId(chatId);
         chatMemory().clear(chatId);
-        stringRedisTemplate.opsForSet().remove(CHAT_LIST_KEY_PREFIX + currentUserName(), chatId);
-        // chatId 来自 @PathVariable，零信任：先白名单校验再解析为绝对路径，
+        stringRedisTemplate.opsForSet().remove(CHAT_LIST_KEY_PREFIX + userName, chatId);
+        // 同步清理该会话的向量切片，避免旧 PDF 在 24h TTL 内仍可被 RAG 检索
+        deleteChatVectors(userName, chatId);
         // 校验通过后该路径必然落在 FILE_SAVE_DIR 下，可安全递归删除
-        DirectoryCleaner.deleteRecursively(UserFilePath.resolveSessionDir(currentUserName(), chatId));
+        DirectoryCleaner.deleteRecursively(UserFilePath.resolveSessionDir(userName, chatId));
+        // 删除清理任务的过期标记，避免定时任务日后对已删除会话重复扫描
+        String cacheKey = CHAT_MEMORY_KEY_PREFIX + userName + ":" + chatId;
+        stringRedisTemplate.delete(cacheKey);
+        stringRedisTemplate.opsForSet().remove(CHAT_MEMORY_CLEANUP_SET, cacheKey);
         return Result.success("删除成功");
     }
 
@@ -289,6 +297,22 @@ public class ChatController {
             return null;
         }
         return documents.stream().map(Document::getText).collect(Collectors.joining("\n---\n"));
+    }
+
+    /**
+     * 按 user + chat_id 删除该会话在向量库中的全部切片。
+     * 向量清理失败只记录日志，不阻塞 Redis 记忆与磁盘文件的删除。
+     */
+    private void deleteChatVectors(String userName, String chatId) {
+        FilterExpressionBuilder filter = new FilterExpressionBuilder();
+        Filter.Expression expression = filter.and(
+                filter.eq("user", userName),
+                filter.eq("chat_id", chatId)).build();
+        try {
+            vectorStore.delete(expression);
+        } catch (Exception e) {
+            log.error("删除会话向量失败, user={}, chatId={}", userName, chatId, e);
+        }
     }
 
     /**

@@ -44,6 +44,7 @@ public class ToolRegistration {
                 timeTool,
                 assignmentFinishTool,
                 fileOperationTool,
+                loadReferenceTool,
                 pdfGenerationTool,
                 resourceDownloadTool,
 //                webScrapingTool,网页爬取工具由于返回的上下文太长，会导致被阿里拒绝访问

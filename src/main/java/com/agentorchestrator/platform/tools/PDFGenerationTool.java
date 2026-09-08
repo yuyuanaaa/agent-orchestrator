@@ -84,8 +84,8 @@ public class PDFGenerationTool {
                 document.add(new Paragraph(sanitizeContent(content)));
                 addImages(document, imagePaths, fileDir);
             }
-            //生成访问路径
-            String httpUrl = HttpPathUtil.writeHttpUrl("/"+BaseContent.getUser().getUserName()+"/" + BaseContent.getChatId() + "/file/" + fileName);
+            //生成访问路径：必须带 /files 前缀，与 MVCConfig 的 /files/** -> file:./tmp/ 静态映射对应，否则链接 404
+            String httpUrl = HttpPathUtil.writeHttpUrl("/files/" + BaseContent.getUser().getUserName() + "/" + BaseContent.getChatId() + "/file/" + fileName);
             return "PDF生成成功，访问路径："+httpUrl;
         } catch (Exception e) {
             log.error("Error generating PDF", e);
