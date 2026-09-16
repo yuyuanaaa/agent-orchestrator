@@ -35,9 +35,23 @@ set -euf
 # OS specific support.
 native_path() { printf %s\\n "$1"; }
 case "$(uname)" in
-CYGWIN* | MINGW*)
+CYGWIN* | MINGW* | MSYS*)
   [ -z "${JAVA_HOME-}" ] || JAVA_HOME="$(cygpath --unix "$JAVA_HOME")"
   native_path() { cygpath --path --windows "$1"; }
+  ;;
+esac
+
+# MWRAPPER: some shells (e.g. MSYS2/Git Bash launched with MSYS_NO_PATHCONV=1 or
+# MSYS2_ARG_CONV_EXCL=*) disable automatic POSIX-to-Windows path conversion. In that
+# case Maven's own bin/mvn script - whose MinGW branch only normalizes MAVEN_HOME and
+# JAVA_HOME but leaves CLASSWORLDS_JAR untouched (see the "# TODO classpath?" comment
+# there) - hands a unix-style path to the Windows java.exe and aborts with
+# "Could not find or load main class org.codehaus.plexus.classworlds.launcher.Launcher".
+# Clearing the two switches for this process only is safe: mvnw converts every path it
+# passes to native tools explicitly through cygpath/native_path above.
+case "$(uname)" in
+CYGWIN* | MINGW* | MSYS*)
+  unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL || :
   ;;
 esac
 

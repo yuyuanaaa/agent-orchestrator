@@ -59,8 +59,10 @@ import java.util.stream.Collectors;
  * 请求链路：{@link RouterAgent} 意图路由 → 简单对话 / 复杂任务规划执行 / 反问补全。
  * 复杂任务由 {@link PlanExecute} 拆解为子任务并行执行，全过程通过 SSE 向前端推送思考过程与最终结果。
  * <p>
- * 注意：SSE 接口在异步线程中执行，异常不会被 GlobalExceptionHandler 捕获，
- * 因此这里统一在 finally 中推送错误事件并关闭连接。
+ * 注意：SSE 接口的异常在异步线程中抛出，不会经过 GlobalExceptionHandler，
+ * 因此统一由 {@link #executeSse} 捕获、推送 SSE 错误事件并关闭连接；
+ * 并且不使用 SseEmitter#completeWithError（它会触发容器渲染 /error 错误页，
+ * 与已固定为 text/event-stream 的响应头冲突）。
  */
 @RestController
 @RequestMapping("/ai/chat")
@@ -265,8 +267,12 @@ public class ChatController {
                 log.error("对话执行异常, chatId={}", chatIdInThread, e);
                 // 记录失败供熔断器统计，连续失败达到阈值后自动熔断
                 llmCircuitBreaker.recordFailure();
+                // 错误已经通过 SSE 事件推给前端，这里只补一条可读的失败提示。
+                // 注意：不能调用 emitter.completeWithError(e)——它会触发 Servlet 异步 ERROR 派发去渲染
+                // /error 错误页，而本响应的 Content-Type 已固定为 text/event-stream，错误页写 JSON 必然失败
+                // （HttpMessageNotWritableException: No converter for LinkedHashMap with preset Content-Type
+                // 'text/event-stream'），只会刷出误导性堆栈。连接收尾统一交给 finally 的 complete()。
                 SSESend.sendEventResult(emitter, "执行失败: " + e.getMessage());
-                emitter.completeWithError(e);
             } finally {
                 // 释放 ThreadLocal，避免线程池复用时串号与内存泄漏
                 BaseContent.removeChatId();

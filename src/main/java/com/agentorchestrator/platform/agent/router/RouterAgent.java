@@ -7,6 +7,7 @@ import com.agentorchestrator.platform.content.BaseContent;
 import com.agentorchestrator.platform.memory.RedisChatMemory;
 import com.agentorchestrator.platform.skill.Skill;
 import com.agentorchestrator.platform.skill.SkillRegistry;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
@@ -31,6 +32,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class RouterAgent {
 
     private static final Pattern PHONE_PATTERN = Pattern.compile("1[3-9][0-9xX]{4,9}");
@@ -137,14 +139,22 @@ public class RouterAgent {
 
         Prompt userPrompt = new Prompt(new UserMessage(userContent), chatOptions);
 
-        ClassifyResult result = chatClient.prompt(userPrompt)
-                .system(s -> s.text(systemPrompt)
-                        .param("skillContext", skillContext)
-                        .param("format", converter.getJsonSchema())
-                        .param("role", ChatSystem.CHAT_SYSTEM))
-                .toolCallbacks(allTools)
-                .call()
-                .entity(converter);
+        ClassifyResult result;
+        try {
+            result = chatClient.prompt(userPrompt)
+                    .system(s -> s.text(systemPrompt)
+                            .param("skillContext", skillContext)
+                            .param("format", converter.getJsonSchema())
+                            .param("role", ChatSystem.CHAT_SYSTEM))
+                    .toolCallbacks(allTools)
+                    .call()
+                    .entity(converter);
+        } catch (Exception e) {
+            // 结构化解析失败（mock 模式返回占位文案、或真实模型未按要求输出 JSON）时降级为简单对话，
+            // 保证整轮请求不中断。详见 selectSkillsWithLLM 中的说明。
+            log.warn("[Router] 意图分类解析失败，降级为简单对话: {}", e.getMessage());
+            return new RouteDecision(QuestionType.SIMPLE_CHAT, "LLM分类解析失败，降级为简单对话", null, userContent);
+        }
 
         if (result == null) {
             return new RouteDecision(QuestionType.SIMPLE_CHAT, "LLM分类失败，默认简单对话",null,userContent);
@@ -152,7 +162,10 @@ public class RouterAgent {
 
         QuestionType type;
         try {
-            type = QuestionType.valueOf(result.questionType());
+            // questionType 缺失（null）时 QuestionType.valueOf 会抛 NPE，这里一并兜底
+            type = result.questionType() == null
+                    ? QuestionType.SIMPLE_CHAT
+                    : QuestionType.valueOf(result.questionType());
         } catch (IllegalArgumentException e) {
             type = QuestionType.SIMPLE_CHAT;
         }
@@ -234,14 +247,24 @@ public class RouterAgent {
                 json输出格式：{format}
                 """;
 
-        SkillSelection result = chatClient.prompt()
-                .system(s -> s.text(prompt)
-                        .param("skills", skillsSummary)
-                        .param("format", converter.getJsonSchema())
-                        .param("history",history))
-                .user(userPrompt)
-                .call()
-                .entity(converter);
+        SkillSelection result;
+        try {
+            result = chatClient.prompt()
+                    .system(s -> s.text(prompt)
+                            .param("skills", skillsSummary)
+                            .param("format", converter.getJsonSchema())
+                            .param("history",history))
+                    .user(userPrompt)
+                    .call()
+                    .entity(converter);
+        } catch (Exception e) {
+            // 结构化解析失败：Spring AI 的 .entity(converter) 在内容非 JSON 时会直接抛 ConversionException
+            // （内容为 null 才返回 null，所以下面原有的 null 兜底覆盖不到这里）。
+            // 典型场景：mock profile 下 MockChatModel 返回占位文案；真实模型偶发不按 JSON 输出。
+            // 降级为「未匹配到技能」，由下游分类规则继续处理，不中断整轮对话。
+            log.warn("[Router] 技能选择解析失败，降级为未匹配技能: {}", e.getMessage());
+            return List.of();
+        }
 
         return result != null ? result.skillNames() : List.of();
     }

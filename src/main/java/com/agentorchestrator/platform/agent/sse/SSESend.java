@@ -1,11 +1,13 @@
 package com.agentorchestrator.platform.agent.sse;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+@Slf4j
 public class SSESend {
 
     // ====================== 辅助方法：发送SSE事件 ======================
@@ -25,6 +27,11 @@ public class SSESend {
      * 第一个换行之后的内容全部丢弃（表现为「后端有输出、前端只显示第一行或什么都不显示」）。
      * 因此这里按行拆分、逐行调用 {@code data()}，让每一行都带 "data:" 前缀（符合 SSE 规范的多行写法），
      * 前端已有的「按行收集 data 后 join 回来」逻辑会正确还原出完整文本。
+     * <p>
+     * 发送失败（客户端断开、响应流已结束）时只返回 false，<b>不调用 completeWithError</b>：
+     * 该方法会触发 Servlet 异步 ERROR 派发去渲染 /error 错误页，而本响应的 Content-Type 已被固定为
+     * text/event-stream，错误页写 JSON 必然失败（HttpMessageNotWritableException）。
+     * emitter 的生命周期统一由调用方（ChatController.executeSse）负责收尾。
      */
     private static boolean sendEvent(SseEmitter emitter, String prefix, String data) {
         try {
@@ -38,9 +45,10 @@ public class SSESend {
                 emitter.send(builder);
                 return true;
             }
-        } catch (IOException e) {
-            // 发送失败时关闭连接
-            emitter.completeWithError(e);
+        } catch (IOException | IllegalStateException e) {
+            // 客户端已断开（IOException）或 emitter 已完成（IllegalStateException），
+            // 只标记本次发送失败，由调用方决定是否终止链路
+            log.debug("SSE 事件发送失败，跳过本次推送: {}", e.getMessage());
             return false;
         }
     }

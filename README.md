@@ -266,7 +266,7 @@ src/main/java/com/agentorchestrator/platform/
 
 ## 测试
 
-共 38 个测试（含 3 个性能基准），绝大部分不依赖外部 LLM / 真实 MySQL，可一键复跑：
+共 **49** 个测试（46 个业务测试 + 3 个性能基准），绝大部分不依赖外部 LLM / 真实 MySQL，可一键复跑：
 
 ```bash
 ./mvnw test
@@ -275,11 +275,12 @@ src/main/java/com/agentorchestrator/platform/
 | 测试类 | 数量 | 覆盖 |
 |---|---|---|
 | `SkillRegistryTest` | 3 | 中英混合分词、技能匹配、Frontmatter 解析 |
-| `PlanExecuteTest` | 9 | 拓扑分层（线性/并行/菱形/循环依赖）、LLM 分解降级、契约工具筛选 |
-| `OrderToolTest` | 5 | 订单详情回填、`NOT_A_DISH` 哨兵、null/空列表容错、多条目不覆盖 |
+| `PlanExecuteTest` | 10 | 拓扑分层（线性/并行/菱形/循环依赖）、LLM 分解降级、契约工具筛选 |
+| `OrderToolTest` | 6 | 订单详情回填、`NOT_A_DISH` 哨兵、null/空列表容错、多条目不覆盖 |
 | `DishToolTest` | 4 | 类别名批量回填（N+1 修复回归）、id 去重、空结果不查库 |
 | `MenuCacheServiceTest` | 5 | SCAN 替代 KEYS、连带失效策略、空 key 不删、Redis 异常降级 |
 | `WebSearchToolTest` | 1 | 联网搜索工具加载冒烟 |
+| `MockChatModelTest` | 9 | mock 调用点分派：三处结构化输出可被 `BeanOutputConverter` 解析、子任务 ReAct 主动收尾、汇总回显；含「带 `getFormat()` 尾注」与「任务内容夹带 schema 仍走 ReAct」两条回归 |
 | `ChatRateLimiterTest` | 4 | 阈值放行 / 超限拒绝 / Redis 异常降级 / 首次计数设过期 |
 | `LLMCircuitBreakerTest` | 3 | 连续失败熔断 / 成功复位 / 无失败时正常 |
 | `AgentPlatformApplicationTests` | 1 | Spring 上下文冒烟（需本地 MySQL/Redis/模型 Key） |
@@ -303,8 +304,23 @@ src/main/java/com/agentorchestrator/platform/
 ## 免 Key 演示：Mock Profile
 
 为让面试官 clone 仓库后**无需任何 API Key 即可跑通「路由 → 规划 → 执行 → 蒸馏 → 汇总」完整链路**，
-内置了 mock profile：使用 `MockChatModel` / `MockEmbeddingModel` 顶替真实模型，
-输出固定占位文案（标注 `[Mock 模式]`）。
+内置了 mock profile：使用 `MockChatModel` / `MockEmbeddingModel` 顶替真实模型。
+
+`MockChatModel` 按**调用点**（而非用户问题）返回内容——各调用点都会把自己的 JSON Schema 渲染进提示词，
+因此可以据此分派：技能选择 / 意图分类 / 任务拆分三处返回合规 JSON，子任务 ReAct 主动调用 `assignmentFinish` 收尾，
+汇总阶段回显收到的子任务结果，其余（简单对话、RAG 问答、结果蒸馏）返回带 `[Mock 模式]` 标识的占位文案。
+效果：业务类问题（如「帮我推荐几道招牌菜」）会真实走完意图路由 → 任务拆分（2 个有依赖的子任务）→ 波次执行 → 结果汇总，
+对话类问题（如「你好」）直接走简单对话。实测一轮多智能体链路共推送 **22 个 SSE 事件 / 约 1.3 KB**。
+
+分派上踩过两个坑，已固化为回归测试：
+
+- **结构化输出的「格式尾注」会被当成用户输入。** `BeanOutputConverter` 会把一整段
+  「输出格式要求 + JSON Schema」追加到用户消息末尾；直接取用户消息当任务内容，会让子任务的
+  `taskContent` 变成几 KB 的 schema 文本，并污染下游「上游任务 → 核心结果」上下文。
+  现在统一按 `Your response should be in JSON format` 剥离该尾注。
+- **判断顺序必须「ReAct 优先」。** 若先判结构化标记，一旦任务内容里夹带了 schema（内含
+  `subTaskList` 属性名），子任务的 ReAct 就会被误判成「任务拆分」、返回 JSON 而非工具调用，
+  子任务收不了尾、空转到 5 步上限（表现为前端重复 5 段文案、响应膨胀到几十 KB）。
 
 启动方式：
 
@@ -316,7 +332,7 @@ java -jar target/agent-orchestrator-0.0.1-SNAPSHOT.jar --spring.profiles.active=
 
 > 仍需本地 MySQL（端口 3306）与 Redis（6379），但不需要 DashScope API Key。
 > MySQL/Redis 也可走 Docker：`docker compose up -d mysql redis`（compose 文件已包含）。
-> mock 模式下 RAG 检索与联网搜索为占位（向量为全零），但对话链路完整贯通。
+> mock 模式下子任务不会真的调用外部工具（RAG 检索与联网搜索为占位，向量为全零），链路结构完整贯通、内容为占位。
 
 ## 本地压测（产出 P95 / TPS / 命中率）
 

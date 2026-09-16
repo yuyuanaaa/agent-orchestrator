@@ -19,8 +19,11 @@ import java.util.stream.Collectors;
 /**
  * 全局异常处理。
  * <p>
- * 注意：SSE 接口（返回 SseEmitter）的异常发生在异步线程中，响应流已经开始，
- * 不会被这里的处理器捕获，需要在 Controller 内部自行兜底并推送错误事件。
+ * 注意：SSE 接口（返回 SseEmitter）的业务异常发生在异步线程中，不会走到这里，
+ * 需要在 Controller 内部自行兜底并推送错误事件。
+ * 但若 Controller 调用了 {@code emitter.completeWithError(e)}，Spring 会触发 Servlet 异步 ERROR 派发，
+ * 届时容器渲染 /error 错误页的失败会回灌到这里——而该响应 Content-Type 已是 text/event-stream，
+ * 本类返回的 {@code Result} 同样无法序列化。因此 SSE 链路上一律不要使用 completeWithError。
  */
 @Slf4j
 @RestControllerAdvice

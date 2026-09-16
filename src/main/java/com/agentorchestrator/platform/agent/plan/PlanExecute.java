@@ -274,13 +274,22 @@ public class PlanExecute {
 //                    交付要求：{deliverables}
 //                """;
 
-        return chatClient.prompt()
-                .system(s -> s.text(prompt)
-                        .param("format", converter.getJsonSchema()))
-                .user(task)
-                .toolCallbacks(allTools)
-                .call()
-                .entity(converter);
+        DecomposedTasks decomposedTasks;
+        try {
+            decomposedTasks = chatClient.prompt()
+                    .system(s -> s.text(prompt)
+                            .param("format", converter.getJsonSchema()))
+                    .user(task)
+                    .toolCallbacks(allTools)
+                    .call()
+                    .entity(converter);
+        } catch (Exception e) {
+            // 任务拆分结果解析失败（非 JSON 输出）时返回 null，复用 extractSubTasks 既有的降级逻辑：
+            // 把整个原始任务当成一个子任务直接执行，而不是让异常冒泡中断整轮请求
+            log.warn("[Plan] 任务拆分解析失败，降级为单子任务执行: {}", e.getMessage());
+            return null;
+        }
+        return decomposedTasks;
     }
 
     /**
