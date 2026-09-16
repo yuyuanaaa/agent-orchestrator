@@ -16,11 +16,8 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
-import org.springframework.ai.document.Document;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -41,15 +38,13 @@ public class RouterAgent {
             "(?:收货地址|配送地址|送到|送至|配送至|地址)\\s*[是为:：]?\\s*([\\p{L}\\p{N}·]{2,})");
 
     private final ChatClient chatClient;
-    private final VectorStore vectorStore;
     private final ChatMemory chatMemory;
     private final ToolCallback[] allTools;
     private final SkillRegistry skillRegistry;
     private final SseEmitter sseEmitter;
 
-    public RouterAgent(ChatModel model, VectorStore vectorStore, ToolCallback[] allTools, SkillRegistry skillRegistry, SseEmitter sseEmitter, StringRedisTemplate stringRedisTemplate) throws IOException {
+    public RouterAgent(ChatModel model, ToolCallback[] allTools, SkillRegistry skillRegistry, SseEmitter sseEmitter, StringRedisTemplate stringRedisTemplate) throws IOException {
         this.chatClient = ChatClient.builder(model).defaultAdvisors(new MyLoggerAdvisor()).build();
-        this.vectorStore = vectorStore;
         this.chatMemory = new RedisChatMemory(stringRedisTemplate, BaseContent.getUser().getUserName());
         this.allTools = allTools;
         this.skillRegistry = skillRegistry;
@@ -63,9 +58,6 @@ public class RouterAgent {
         List<String> selectedSkillNames = selectSkillNamesWithFallback(userPrompt);
         List<Skill> skills = buildSelectedSkillsContext(selectedSkillNames);
         String skillContext = skills == null||skills.isEmpty()?"未匹配到技能":skillRegistry.getSkillsPromptContext(skills);
-//        //计算RAG的相似度
-//        java.util.List<Document> documents = getVectorRelevanceScore(userPrompt);
-//        double vectorScore = documents == null||documents.isEmpty()?0.0:documents.get(0).getScore();
         RouteDecision decision = llmClassify(userPrompt, conversationId, skillContext, skills);
         SSESend.sendEventThink(sseEmitter,decision.reason()+"\n");
         //把命中的技能一并带出去：ChatController 将 skills 传给 PlanExecute，
@@ -74,17 +66,6 @@ public class RouterAgent {
                 decision,
                 skills
         );
-    }
-
-    private List<Document> getVectorRelevanceScore(String prompt) {
-        if (prompt == null || prompt.isBlank()) return null;
-        SearchRequest request = SearchRequest.builder()
-                .query(prompt)
-                .topK(1)
-                .build();
-        List<Document> documents = vectorStore.similaritySearch(request);
-        if (documents == null || documents.isEmpty()) return null;
-        return documents;
     }
 
     private RouteDecision llmClassify(String prompt, String conversationId, String skillContext, List<Skill> matchedSkills) {

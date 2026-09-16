@@ -5,7 +5,6 @@ import com.agentorchestrator.platform.agent.simpleChat.SimpleChatAgent;
 import com.agentorchestrator.platform.skill.SkillRegistry;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -30,19 +29,16 @@ import java.io.IOException;
 public class AgentFactory {
 
     private final ChatModel chatModel;
-    private final VectorStore vectorStore;
     private final ToolCallback[] allTools;
     private final SkillRegistry skillRegistry;
     private final StringRedisTemplate stringRedisTemplate;
 
     @Autowired
     public AgentFactory(ChatModel chatModel,
-                        VectorStore vectorStore,
                         ToolCallback[] allTools,
                         SkillRegistry skillRegistry,
                         StringRedisTemplate stringRedisTemplate) {
         this.chatModel = chatModel;
-        this.vectorStore = vectorStore;
         this.allTools = allTools;
         this.skillRegistry = skillRegistry;
         this.stringRedisTemplate = stringRedisTemplate;
@@ -50,7 +46,7 @@ public class AgentFactory {
 
     /** 创建意图路由智能体（每个 SSE 会话一个实例） */
     public RouterAgent createRouterAgent(SseEmitter emitter) throws IOException {
-        return new RouterAgent(chatModel, vectorStore, allTools, skillRegistry, emitter, stringRedisTemplate);
+        return new RouterAgent(chatModel, allTools, skillRegistry, emitter, stringRedisTemplate);
     }
 
     /** 创建简单对话智能体（每个 SSE 会话一个实例） */
