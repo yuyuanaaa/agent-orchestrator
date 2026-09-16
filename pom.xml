@@ -119,12 +119,6 @@
             <artifactId>okhttp</artifactId>
             <version>4.12.0</version>
         </dependency>
-        <!--        网页抓取功能（根据地址获取网页的html等信息-->
-        <dependency>
-            <groupId>org.jsoup</groupId>
-            <artifactId>jsoup</artifactId>
-            <version>1.19.1</version>
-        </dependency>
         <!--        pdf生成-->
         <dependency>
             <groupId>com.itextpdf</groupId>
@@ -137,12 +131,6 @@
             <artifactId>font-asian</artifactId>
             <version>9.1.0</version>
         </dependency>
-        <!--        springAi对markdown文件解析依赖-->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-markdown-document-reader</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

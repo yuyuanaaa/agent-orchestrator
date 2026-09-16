@@ -1,5 +1,5 @@
 ---
-name: general_trip_planner
+name: make_travel_plan
 domain: travel
 description: 制定旅游/出差/休闲通用行程
 compatibility: 需要联网搜索API
@@ -17,4 +17,3 @@ metadata: {author: dev-team, version: 1.0}
 - 上海3天旅游
 - 北京出差2天
 - 杭州周末游
-  }

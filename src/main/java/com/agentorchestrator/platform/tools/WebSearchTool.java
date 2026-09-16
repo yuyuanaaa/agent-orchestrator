@@ -59,7 +59,8 @@ public class WebSearchTool {
                 .build();
     }
 
-    //注意，我在工具统一注册的时候使用了new,new会绕过spring的容器管理，导致无法注入这个apikey
+    //本类由 Spring 管理（@Component + 构造注入），ToolRegistration 里也是 @Autowired 注入实例，
+    //因此这里的 @Value 能正常生效，ApiKey 可放心使用。
     @Value("${app.baidu.api.key}")
     private String ApiKey;
 

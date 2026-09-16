@@ -14,12 +14,15 @@ import java.util.stream.Collectors;
  * 在应用启动时通过 {@link SkillLoader#loadAllSkills()} 加载
  * {@code classpath:skills/**\/*.md} 下的所有技能定义，缓存到内存中。
  * <p>
- * 架构中的两处使用点：
+ * 架构中的使用点：
  * <ul>
- *   <li><b>RouterAgent</b>：调用 {@link #findRelevant(String)} 匹配用户输入对应的 Skill，
- *       结合 Skill 的必需参数判断用户信息是否充分 → 决定是否 AMBIGUOUS</li>
- *   <li><b>PlanExecute</b>：调用 {@link #getMatchingSkillsPromptContext(String)} 生成
- *       匹配 Skill 的 Markdown 上下文文本 → 注入 LLM system prompt 指导任务分解</li>
+ *   <li><b>RouterAgent</b>：主路径把技能摘要（名称 + 描述）交给 LLM 选择。
+ *       {@link #findRelevant(String)} 是 LLM 技能选择失败时的确定性兜底；
+ *       {@link #getSkill(String)} 用于取回技能对象，再按
+ *       {@code Skill#getHighImportanceParamNames()} 判断高重要度参数是否齐备 → 决定是否 AMBIGUOUS。</li>
+ *   <li><b>PlanExecute</b>：接收路由阶段命中的技能列表，通过
+ *       {@link #getSkillsPromptContext(java.util.List)} 渲染成 Markdown 注入任务分解提示词，
+ *       让技能定义的执行流程真正参与任务拆分。</li>
  * </ul>
  */
 @Component
@@ -76,6 +79,10 @@ public class SkillRegistry {
      *   <li>用户输入包含 Skill 参数名</li>
      * </ol>
      * 如果没有匹配到任何 Skill，返回空列表。
+     * <p>
+     * 定位：这是<b>规则侧</b>的能力，与「LLM 选技能」互为补充 ——
+     * 当前用在 {@code RouterAgent} 的兜底分支上（LLM 调用失败 / 返回不可解析时启用），
+     * 保证技能选择这一环不会因为模型侧故障而完全失效。
      */
     public List<Skill> findRelevant(String query) {
         if (query == null || query.isBlank()) return new ArrayList<>(allSkills);
@@ -101,33 +108,11 @@ public class SkillRegistry {
         return sorted;
     }
 
-    /** 将所有 Skill 格式化为 LLM prompt 上下文文本 */
-    public String getSkillsPromptContext() {
-        return allSkills.stream()
-                .map(Skill::toPromptContext)
-                .collect(Collectors.joining("\n---\n"));
-    }
-
     /** 将指定的 Skill 列表格式化为 LLM prompt 上下文文本 */
     public String getSkillsPromptContext(List<Skill> skills) {
         return skills.stream()
                 .map(Skill::toPromptContext)
                 .collect(Collectors.joining("\n---\n"));
-    }
-
-    /**
-     * 根据用户输入生成匹配 Skill 的 prompt 上下文文本。
-     * 先通过 {@link #findRelevant(String)} 匹配，然后将匹配到的 Skill
-     * 格式化为 Markdown 文本，用于注入 LLM 的 system prompt。
-     * <p>
-     * 输出格式：先列出匹配到的 Skills 概览，再给出每个 Skill 的详细定义。
-     */
-    public String getMatchingSkillsPromptContext(String query) {
-        List<Skill> relevant = findRelevant(query);
-        if (relevant.isEmpty()) return "当前没有匹配的业务技能。";
-        return "当前可用的业务技能：\n" + relevant.stream()
-                .map(s -> "- " + s.getName() + ": " + s.getDescription())
-                .collect(Collectors.joining("\n")) + "\n\n详细定义：\n" + getSkillsPromptContext(relevant);
     }
 
     /**

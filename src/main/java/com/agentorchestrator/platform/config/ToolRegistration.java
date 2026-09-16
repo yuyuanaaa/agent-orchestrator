@@ -47,7 +47,8 @@ public class ToolRegistration {
                 loadReferenceTool,
                 pdfGenerationTool,
                 resourceDownloadTool,
-//                webScrapingTool,网页爬取工具由于返回的上下文太长，会导致被阿里拒绝访问
+                // 网页爬取工具（WebScrapingTool）已移除：返回的上下文太长会被阿里拒绝访问，jsoup 依赖一并删除。
+                // 联网检索统一走 webSearchTool（百度千帆 ai_search + RAG 提纯）。
                 webSearchTool
         );
     }

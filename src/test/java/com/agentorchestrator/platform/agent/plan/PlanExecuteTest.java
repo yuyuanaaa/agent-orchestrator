@@ -1,5 +1,10 @@
 package com.agentorchestrator.platform.agent.plan;
 
+import com.agentorchestrator.platform.skill.Skill;
+import com.agentorchestrator.platform.skill.SkillLoader;
+import com.agentorchestrator.platform.skill.SkillParameter;
+import com.agentorchestrator.platform.skill.SkillRegistry;
+import com.agentorchestrator.platform.skill.SkillStep;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,11 +28,12 @@ import static org.mockito.Mockito.when;
 /**
  * PlanExecute 核心纯逻辑单元测试（不依赖 Spring 容器与 LLM）。
  * <p>
- * 覆盖三个关键算法：
+ * 覆盖四个关键算法：
  * <ul>
  *   <li>{@code buildExecutionWaves}：依赖拓扑分层（并行波次构建）</li>
  *   <li>{@code extractSubTasks}：LLM 分解结果为空时的降级兜底</li>
  *   <li>{@code getTools}：按子任务契约筛选工具</li>
+ *   <li>{@code buildSkillContext}：路由命中的技能定义注入任务分解上下文</li>
  * </ul>
  */
 class PlanExecuteTest {
@@ -40,7 +46,8 @@ class PlanExecuteTest {
         planExecute = new PlanExecute(
                 Mockito.mock(OpenAiChatModel.class),
                 null,                                // 工厂在纯逻辑测试中不会被触达
-                Runnable::run);                      // 同步执行器（waveExecutor），纯逻辑测试不真正并发
+                Runnable::run,                       // 同步执行器（waveExecutor），纯逻辑测试不真正并发
+                new SkillRegistry(new SkillLoader())); // 格式化技能上下文，纯逻辑不触达文件系统
     }
 
     private SubTask task(int id, Set<Integer> downstream) {
@@ -202,5 +209,51 @@ class PlanExecuteTest {
         ToolCallback[] selected = planExecute.getTools(Set.of());
 
         assertEquals(all.length, selected.length);
+    }
+
+    // ==================== buildSkillContext ====================
+
+    /** 一个带完整定义（参数 / 执行流程 / 工具）的技能，用于验证注入内容是否够用 */
+    private Skill dishQuerySkill() {
+        return Skill.builder()
+                .name("dish_and_setmeal_query")
+                .domain("commerce")
+                .description("查询菜品与套餐")
+                .parameters(List.of(new SkillParameter("category", "string", "菜品分类", "high")))
+                .steps(List.of(new SkillStep(1, "查询菜品",
+                        "调用菜品查询工具获取在售菜品", List.of("queryDish"))))
+                .relatedTools(List.of("queryDish", "querySetmeal"))
+                .build();
+    }
+
+    @Test
+    @DisplayName("命中的技能定义应完整注入分解上下文（名称 / Execution Flow / 工具 / 高重要度参数）")
+    void skillContextShouldCarryFullSkillDefinition() {
+        String context = planExecute.buildSkillContext(List.of(dishQuerySkill()));
+
+        assertTrue(context.contains("## Skill: dish_and_setmeal_query"));
+        assertTrue(context.contains("### Execution Flow"));
+        assertTrue(context.contains("queryDish"));
+        assertTrue(context.contains("importance: high"));
+    }
+
+    @Test
+    @DisplayName("多技能命中时按顺序拼接，互不覆盖")
+    void skillContextShouldJoinMultipleSkills() {
+        String context = planExecute.buildSkillContext(List.of(
+                dishQuerySkill(),
+                Skill.builder().name("place_order").domain("commerce").description("下单").build()));
+
+        assertTrue(context.contains("## Skill: dish_and_setmeal_query"));
+        assertTrue(context.contains("## Skill: place_order"));
+    }
+
+    @Test
+    @DisplayName("未命中技能时给占位说明，不把空上下文塞进提示词")
+    void skillContextShouldFallbackWhenNothingMatched() {
+        String placeholder = "本轮未命中业务技能，按通用流程拆分即可。";
+
+        assertEquals(placeholder, planExecute.buildSkillContext(null));
+        assertEquals(placeholder, planExecute.buildSkillContext(List.of()));
     }
 }

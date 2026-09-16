@@ -42,7 +42,8 @@ class TopologyParallelBenchmark {
         PlanExecute planExecute = new PlanExecute(
                 Mockito.mock(OpenAiChatModel.class),
                 null,
-                Runnable::run); // buildExecutionWaves 是纯逻辑，不需要线程池
+                Runnable::run, // buildExecutionWaves 是纯逻辑，不需要线程池
+                null);         // 技能注册中心在本基准中不被触达
 
         // 构造 N 个相互独立的子任务（无下游依赖，全部归为同一波次）
         List<SubTask> subTasks = IntStream.rangeClosed(1, TASK_COUNT)

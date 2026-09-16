@@ -59,8 +59,8 @@ public class RouterAgent {
 
     public RouteDecisionTotal route(String userPrompt, String conversationId) {
         SSESend.sendEventThink(sseEmitter,"正在进行意图分析...\n");
-        //用LLM匹配这次用户提问所使用的skill
-        List<String> selectedSkillNames = selectSkillsWithLLM(userPrompt);
+        //技能选择：LLM 主路径 + 规则兜底
+        List<String> selectedSkillNames = selectSkillNamesWithFallback(userPrompt);
         List<Skill> skills = buildSelectedSkillsContext(selectedSkillNames);
         String skillContext = skills == null||skills.isEmpty()?"未匹配到技能":skillRegistry.getSkillsPromptContext(skills);
 //        //计算RAG的相似度
@@ -68,7 +68,8 @@ public class RouterAgent {
 //        double vectorScore = documents == null||documents.isEmpty()?0.0:documents.get(0).getScore();
         RouteDecision decision = llmClassify(userPrompt, conversationId, skillContext, skills);
         SSESend.sendEventThink(sseEmitter,decision.reason()+"\n");
-        //将LLM匹配到的全部skill名称携带到RouteDecision中，供下游Agent使用
+        //把命中的技能一并带出去：ChatController 将 skills 传给 PlanExecute，
+        //让技能定义的执行流程真正参与任务分解（只传 mainTask 的话技能契约就白选了）
         return new RouteDecisionTotal(
                 decision,
                 skills
@@ -223,6 +224,32 @@ public class RouterAgent {
     private record ClassifyResult(String questionType, String reason, String returnQuestion,String mainTask) {}
     private record SkillSelection(List<String> skillNames) {}
 
+    /**
+     * 技能选择的完整策略：<b>LLM 主 + 规则兜底</b>。
+     * <p>
+     * 只有「模型侧给不出结论」时才退到 {@link SkillRegistry#findRelevant(String)} 的加权打分，
+     * 避免一次模型抖动就让技能选择整环失效；
+     * 模型明确回答「本次不涉及任何技能」属于有效结论，尊重模型判断，不做二次匹配
+     * （否则「你好」这类闲聊可能被规则误匹配成业务技能）。
+     */
+    private List<String> selectSkillNamesWithFallback(String userPrompt) {
+        List<String> byLlm = selectSkillsWithLLM(userPrompt);
+        if (byLlm != null) {
+            return byLlm;
+        }
+        List<Skill> byRule = skillRegistry.findRelevant(userPrompt);
+        log.warn("[Router] 技能选择降级为规则兜底，规则侧命中: {}",
+                byRule.stream().map(Skill::getName).toList());
+        return byRule.stream().map(Skill::getName).toList();
+    }
+
+    /**
+     * 用 LLM 从技能元数据中选出本次命中的技能。
+     * <p>
+     * 返回值语义：<b>非 null</b> = 模型侧给出了结论（可以是空列表）；
+     * <b>null</b> = 模型侧不可用（调用异常 / 内容为 null / 输出不是合法 JSON），
+     * 由 {@link #selectSkillNamesWithFallback(String)} 转规则兜底。
+     */
     private List<String> selectSkillsWithLLM(String userPrompt) {
         String skillsSummary = skillRegistry.getAllSkills().stream()
                 .map(s -> "- " + s.getName() + ": " + s.getDescription())
@@ -259,14 +286,15 @@ public class RouterAgent {
                     .entity(converter);
         } catch (Exception e) {
             // 结构化解析失败：Spring AI 的 .entity(converter) 在内容非 JSON 时会直接抛 ConversionException
-            // （内容为 null 才返回 null，所以下面原有的 null 兜底覆盖不到这里）。
-            // 典型场景：mock profile 下 MockChatModel 返回占位文案；真实模型偶发不按 JSON 输出。
-            // 降级为「未匹配到技能」，由下游分类规则继续处理，不中断整轮对话。
-            log.warn("[Router] 技能选择解析失败，降级为未匹配技能: {}", e.getMessage());
-            return List.of();
+            // （内容为 null 才返回 null，所以下面原有的 null 判断覆盖不到异常分支）。
+            // 典型场景：真实模型偶发不按 JSON 输出。
+            // 返回 null 交给调用方走规则兜底，不中断整轮对话。
+            log.warn("[Router] 技能选择解析失败: {}", e.getMessage());
+            return null;
         }
 
-        return result != null ? result.skillNames() : List.of();
+        // result == null 说明模型返回内容为空，同属「模型侧不可用」
+        return result != null ? result.skillNames() : null;
     }
 
     /**

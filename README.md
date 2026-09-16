@@ -73,7 +73,10 @@ ChatController ──► RouterAgent（两次 LLM 调用）
 3. **蒸馏双副本**：`structuredCoreResult`（压缩后进上下文）+ `rawResult`（原始结果留存，用于排查与后续召回）；
    结果本身已足够结构化（<2000 字符）时跳过蒸馏，省一次 LLM 调用。
 4. **自研 ReAct 循环**：步数预算防失控；连续 3 次重复输出判定卡死，自动注入提示换策略。
-5. **三层渐进式技能加载**：见上，路由阶段只花元数据的 Token。
+5. **三层渐进式技能加载**：见上，路由阶段只花元数据的 Token。命中技能的定义层（参数表 / Execution Flow /
+   Related Tools）会随路由结果一起传给 `PlanExecute` 注入任务分解提示词，让技能约定的流程真正约束子任务划分。
+   技能选择本身是「LLM 主路径 + `SkillRegistry` 加权打分兜底」：只有模型侧给不出结论（调用异常 / 输出非 JSON）
+   时才退到规则打分，模型明确回答「不涉及技能」时尊重模型判断。
 6. **会话记忆与多租户隔离**：`RedisChatMemory`（Redis 存储，Kryo+Base64 序列化，取最近 10 条，
    多实例共享）+ Redis TTL 登记 + 定时任务清理；向量库按 `user`/`chat_id` 元数据过滤，用户之间互不可见。
 7. **向量库持久化**：`SimpleVectorStore` 快照落盘（`tmp/vector-store.json`）+ 启动自动加载 +
@@ -266,7 +269,7 @@ src/main/java/com/agentorchestrator/platform/
 
 ## 测试
 
-共 **49** 个测试（46 个业务测试 + 3 个性能基准），绝大部分不依赖外部 LLM / 真实 MySQL，可一键复跑：
+共 **52** 个测试（49 个业务测试 + 3 个性能基准），绝大部分不依赖外部 LLM / 真实 MySQL，可一键复跑：
 
 ```bash
 ./mvnw test
@@ -275,7 +278,7 @@ src/main/java/com/agentorchestrator/platform/
 | 测试类 | 数量 | 覆盖 |
 |---|---|---|
 | `SkillRegistryTest` | 3 | 中英混合分词、技能匹配、Frontmatter 解析 |
-| `PlanExecuteTest` | 10 | 拓扑分层（线性/并行/菱形/循环依赖）、LLM 分解降级、契约工具筛选 |
+| `PlanExecuteTest` | 13 | 拓扑分层（线性/并行/菱形/循环依赖）、LLM 分解降级、契约工具筛选、技能定义注入分解上下文 |
 | `OrderToolTest` | 6 | 订单详情回填、`NOT_A_DISH` 哨兵、null/空列表容错、多条目不覆盖 |
 | `DishToolTest` | 4 | 类别名批量回填（N+1 修复回归）、id 去重、空结果不查库 |
 | `MenuCacheServiceTest` | 5 | SCAN 替代 KEYS、连带失效策略、空 key 不删、Redis 异常降级 |

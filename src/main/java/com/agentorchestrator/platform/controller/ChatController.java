@@ -127,7 +127,9 @@ public class ChatController {
                 SimpleChatAgent simpleChatAgent = agentFactory.createSimpleChatAgent();
                 aiResult = simpleChatAgent.simpleChat(msg, chatId);
             } else if (route.decision().questionType() == QuestionType.COMPLEX_TASK) {
-                aiResult = planExecute.planExecute(route.decision().mianTask(), chatId, emitter);
+                // 一并把命中的技能传给 PlanExecute：技能的 Execution Flow 会注入任务分解提示词，
+                // 只传 mainTask 的话路由阶段选出的技能就白选了
+                aiResult = planExecute.planExecute(route.decision().mainTask(), route.skills(), chatId, emitter);
             } else if (route.decision().questionType() == QuestionType.AMBIGUOUS) {
                 // 关键信息缺失或意图不明确，反问用户
                 aiResult = route.decision().returnQuestion();

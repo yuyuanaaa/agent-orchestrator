@@ -1,7 +1,6 @@
 package com.agentorchestrator.platform.agent;
 
 
-import com.itextpdf.styledxmlparser.jsoup.internal.StringUtil;
 import com.agentorchestrator.platform.agent.model.AgentState;
 import com.agentorchestrator.platform.agent.plan.SubTask;
 import com.agentorchestrator.platform.agent.sse.SSESend;
@@ -11,6 +10,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.ArrayList;
@@ -48,7 +48,7 @@ public abstract class BaseAgent {
             throw new RuntimeException("Cannot run agent from state: " + this.state);
         }
         //用户提示词为空
-        if (StringUtil.isBlank(userPrompt)) {
+        if (!StringUtils.hasText(userPrompt)) {
             throw new RuntimeException("Cannot run agent with empty user prompt");
         }
         //修改状态为运行中

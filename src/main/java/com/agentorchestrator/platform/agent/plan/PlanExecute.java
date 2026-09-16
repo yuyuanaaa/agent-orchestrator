@@ -12,6 +12,8 @@ import com.agentorchestrator.platform.common.ChatSystem;
 import com.agentorchestrator.platform.constant.FileConstant;
 import com.agentorchestrator.platform.content.BaseContent;
 import com.agentorchestrator.platform.entity.dto.UserLoginDTO;
+import com.agentorchestrator.platform.skill.Skill;
+import com.agentorchestrator.platform.skill.SkillRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -85,20 +87,31 @@ public class PlanExecute {
 
     /** wave 子任务线程池（见 AsyncConfig.waveExecutor），与 SSE 主任务池隔离，避免嵌套提交死锁 */
     private final Executor waveExecutor;
+    /** 技能注册中心：把路由阶段命中的技能定义（含 Execution Flow）渲染进任务分解提示词 */
+    private final SkillRegistry skillRegistry;
 
     public PlanExecute(ChatModel chatModel,
                        AgentFactory agentFactory,
-                       @Qualifier("waveExecutor") Executor waveExecutor) throws IOException {
+                       @Qualifier("waveExecutor") Executor waveExecutor,
+                       SkillRegistry skillRegistry) throws IOException {
         this.chatModel = chatModel;
         this.agentFactory = agentFactory;
         this.waveExecutor = waveExecutor;
+        this.skillRegistry = skillRegistry;
         this.chatClient = ChatClient.builder(chatModel)
                 .defaultAdvisors(
                 new MyLoggerAdvisor()
         ).build();
     }
     //计划执行，整个智能体执行的入口
-    public String planExecute(String originalTask, String conversationId, SseEmitter emitter) throws IOException {
+    /**
+     * @param originalTask   路由阶段总结出的总任务
+     * @param matchedSkills  路由阶段命中的业务技能（可为空）：其定义会被注入任务分解提示词，
+     *                       让技能的 Execution Flow / 参数契约真正约束子任务划分
+     * @param conversationId 会话 ID
+     * @param emitter        SSE 通道
+     */
+    public String planExecute(String originalTask, List<Skill> matchedSkills, String conversationId, SseEmitter emitter) throws IOException {
         long overallStart = System.currentTimeMillis();//获取系统时间
         //由于任务并行执行时会额外开启一次异步线程，所以需要传递一下线程上下文（本质将Web线程上下文传递到任务执行线程）
         //获取当前线程的上下文
@@ -111,8 +124,9 @@ public class PlanExecute {
         //对意图进行任务拆分
         if(!SSESend.sendEventThink(emitter,"开始对任务进行拆分...\n")) return null;
         long t0 = System.currentTimeMillis();
-        DecomposedTasks decomposedTasks = decomposeTaskWithContract(originalTask);
-        log.info("[Phase] decomposeTask took {} ms", System.currentTimeMillis() - t0);
+        DecomposedTasks decomposedTasks = decomposeTaskWithContract(originalTask, matchedSkills);
+        log.info("[Phase] decomposeTask took {} ms, matchedSkills={}", System.currentTimeMillis() - t0,
+                matchedSkills == null ? List.of() : matchedSkills.stream().map(Skill::getName).toList());
         List<SubTask> subTasks = extractSubTasks(decomposedTasks, originalTask);
         String taskMessage = subTasks.stream().map(s -> {
             return "任务" + s.taskId() + "：" + s.taskName();
@@ -170,7 +184,8 @@ public class PlanExecute {
                             List<String> childResult = subTaskAgent.run(task.taskContent(), task.taskName(), emitter);
                             log.info("[Phase] Subtask {} run() took {} ms", task.taskId(), System.currentTimeMillis() - tRun);
                             //原始结果拼接
-                            String result = childResult.stream().collect(Collectors.joining("/n---/n"));
+                            //分隔符必须是换行符；曾错写成斜杠 /n，结果里会留下 "/n---/n" 字面量
+                            String result = String.join("\n---\n", childResult);
                             //蒸馏任务结果
                             long tDistill = System.currentTimeMillis();
                             DistilledResult distilledResult;
@@ -249,7 +264,14 @@ public class PlanExecute {
         return toolCallbacks;
     }
     //任务分解
-    public DecomposedTasks decomposeTaskWithContract(String task) {
+    /**
+     * 把总任务分解成带依赖契约的子任务。
+     *
+     * @param task          路由阶段总结出的总任务
+     * @param matchedSkills 路由命中的业务技能；非空时把技能定义（参数表 / Execution Flow / 工具 / 示例）
+     *                      注入提示词，使拆分结果遵循技能约定的流程与工具
+     */
+    public DecomposedTasks decomposeTaskWithContract(String task, List<Skill> matchedSkills) {
         BeanOutputConverter<DecomposedTasks> converter = new BeanOutputConverter<>(DecomposedTasks.class);
         String prompt = """
             ##任务生成规则
@@ -265,19 +287,23 @@ public class PlanExecute {
             3. 工具信息只做任务划分参考，不得使用工具
             4. 不得生成无工具的任务
             5. 生成任务不得带有总结类性质,fuseResult智能体会将所有子任务汇合总结展示给用户
+            6. 若下方给出了本次命中的业务技能，子任务划分必须覆盖该技能 Execution Flow 的步骤；
+               toolNames 只从该技能的 Related Tools 与可用工具中选取；技能 Parameters 中importance=high
+               的参数必须由某个子任务负责取到。
+
+            ##本次命中的业务技能
+            {skills}
 
             输出格式要求：{format}
             """;
-//        String userPrompt = """
-//                    核心目标：{mainGoal}
-//                    约束条件：{constraints}
-//                    交付要求：{deliverables}
-//                """;
+
+        String skillContext = buildSkillContext(matchedSkills);
 
         DecomposedTasks decomposedTasks;
         try {
             decomposedTasks = chatClient.prompt()
                     .system(s -> s.text(prompt)
+                            .param("skills", skillContext)
                             .param("format", converter.getJsonSchema()))
                     .user(task)
                     .toolCallbacks(allTools)
@@ -290,6 +316,21 @@ public class PlanExecute {
             return null;
         }
         return decomposedTasks;
+    }
+
+    /**
+     * 渲染注入任务分解提示词的技能上下文。
+     * <p>
+     * 技能定义（参数表 / Execution Flow / Related Tools / Examples）在这里第一次真正进入
+     * 任务分解环节 —— 只把 mainTask 文本交给分解器时，路由阶段选出的技能等于白选。
+     * <p>
+     * 包可见：供 PlanExecuteTest 直接断言，无需启动 LLM。
+     */
+    String buildSkillContext(List<Skill> matchedSkills) {
+        if (matchedSkills == null || matchedSkills.isEmpty()) {
+            return "本轮未命中业务技能，按通用流程拆分即可。";
+        }
+        return skillRegistry.getSkillsPromptContext(matchedSkills);
     }
 
     /**
@@ -361,32 +402,6 @@ public class PlanExecute {
         if (failedTaskIds == null || failedTaskIds.isEmpty()) return false;
         return dependsOn.getOrDefault(taskId, Set.of()).stream().anyMatch(failedTaskIds::contains);
     }
-
-//    /**
-//     * 选取上游任务的蒸馏后结果，若有问题则提取原结果重新蒸馏
-//     * @param currentTask 当前任务
-//     * @param upstreamResults  上游任务列表
-//     * @return
-//     */
-//    private String checkAndFillUpstreamContext(SubTask currentTask, List<DistilledResult> upstreamResults) {
-//        StringBuilder context = new StringBuilder();
-//        // 没有上游依赖，直接返回空
-//        if (upstreamResults.isEmpty()) return "";
-//
-//        // 遍历所有上游结果，校验当前任务需要的字段是否完整
-//        for (DistilledResult upstreamResult : upstreamResults) {
-//            // 只处理当前任务依赖的上游任务
-//            if (!upstreamResult.subTask().downstreamTaskIds().contains(currentTask.taskId())) continue;
-//
-//            SubTask upstreamTask = upstreamResult.subTask();//获取上游任务
-//            Set<String> requiredFields = upstreamTask.requiredFields();
-//            String coreResult = upstreamResult.structuredCoreResult();
-//
-//            // 把校验后的上游核心结果加入上下文
-//            context.append("上游任务:").append(upstreamTask.taskContent()).append("\n核心结果:").append(coreResult).append("\n---\n");
-//        }
-//        return context.toString();
-//    }
 
     /**
      * 选取上游任务结果

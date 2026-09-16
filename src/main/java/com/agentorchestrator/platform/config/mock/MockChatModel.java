@@ -156,7 +156,7 @@ public class MockChatModel implements ChatModel {
                 List.of("下单", "帮我点", "点一份", "点个", "来一份", "买一份", "要一份", "加一份"));
         keywords.put("dish_and_setmeal_query",
                 List.of("吃", "喝", "菜", "套餐", "菜单", "招牌", "推荐", "口味", "饮品", "主食", "价格", "有什么"));
-        keywords.put("general_trip_planner", TRAVEL_KEYWORDS);
+        keywords.put("make_travel_plan", TRAVEL_KEYWORDS);
         return keywords;
     }
 
